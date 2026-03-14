@@ -78,6 +78,10 @@ Detailed rounding rule:
 - `Invoice.total_amount` is rounded to 2 decimal places NOK
 - Rounding happens once at the invoice level, not per line
 
+The difference between `Invoice.total_amount` (rounded, 2 decimals) and `InvoiceLine.total_cost` (full precision) is intentional:
+- `total_amount` is the customer-visible total
+- `total_cost` on InvoiceLine captures the full-precision per-resource cost
+
 ---
 
 # Allowed Pricing Dimensions
@@ -121,15 +125,21 @@ Resources with missing days are billed at **zero** for those missing days. The i
 
 Missing days must be reported in the invoice generation response.
 
+Draft replacement with `force=true`:
+
+When `force=true` and a matching draft invoice exists, the old draft and all its children (InvoiceLines, InvoiceDailyCosts) are deleted in the same transaction and a new invoice is created. The old invoice number (if any) is not reused. The new draft starts with `invoice_number = null`.
+
 ---
 
-# Duplicate Invoice Prevention
+# Concurrency and Duplicate Prevention
 
 There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
 
 A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
 
 A matching draft is replaced atomically when `force=true`.
+
+To prevent race conditions when two invoice generation requests arrive simultaneously for the same `(billing_account, period_start, period_end)`, the system uses a PostgreSQL advisory lock keyed on these three values within the invoice generation transaction. This ensures that the duplicate check and invoice creation are atomic.
 
 ---
 
@@ -161,12 +171,16 @@ discount_price_per_unit_year
 discount_threshold_quantity
 
 effective_from
-effective_to```
+effective_to
+```
 
 Rules:
 
 - price rows **never updated**
 - new pricing → insert new rows
+- `effective_to` is **inclusive** — the price is valid on that day
+- `effective_to = null` means open-ended (no expiration)
+- No two `ResourcePrice` rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges — enforced at the service layer
 
 ---
 
@@ -223,6 +237,17 @@ States:
 draft
 finalized
 ```
+
+---
+
+## Invoice Number Assignment
+
+`invoice_number` is assigned at **finalization**, not at draft creation:
+
+- Draft invoices have `invoice_number = null`
+- Invoice numbers are assigned during finalization
+- Once assigned, an invoice number is immutable and must never be reused
+- Gaps in the sequence from abandoned drafts are acceptable under this scheme
 
 ---
 

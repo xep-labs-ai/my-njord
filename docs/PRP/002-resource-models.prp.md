@@ -4,6 +4,115 @@ Defines all **billable resource models**.
 
 ---
 
+# BillingAccountBase (Abstract)
+
+An abstract Django model defining generic account identity and contact information.
+
+Fields:
+
+```
+name
+contact_point
+contact_email
+contact_telephone_number
+customer_number
+make_invoice
+internal_customer
+```
+
+Rules:
+
+- `name` (CharField, required)
+- `contact_point` (CharField)
+- `contact_email` (EmailField)
+- `contact_telephone_number` (CharField)
+- `customer_number` (CharField)
+- `make_invoice` (BooleanField, default=True) — controls whether invoice generation runs for this account. Resources belonging to an account where `make_invoice = False` are excluded from all invoice generation runs silently.
+- `internal_customer` (BooleanField)
+
+Purpose:
+
+This abstract base allows implementations in different environments to extend generic account fields without carrying UiO-specific fields.
+
+---
+
+# PriceList
+
+Defines pricing for a BillingAccount.
+
+Fields:
+
+```
+id
+name
+created_at
+updated_at
+```
+
+Rules:
+
+- `id` (integer PK)
+- `name` (CharField, required, unique)
+- `created_at` / `updated_at`
+- No status field in v1 — PriceLists are always active
+- Price validity is controlled by `ResourcePrice.effective_from` / `ResourcePrice.effective_to`
+
+---
+
+# BillingAccount (UiO Implementation)
+
+Concrete account model for UiO / USIT environment.
+
+Fields:
+
+```
+id
+name
+price_list
+contact_point
+contact_email
+contact_telephone_number
+customer_number
+make_invoice
+internal_customer
+usit_contact_point
+main_agreement_id
+main_agreement_description
+usit_accounting_place
+usit_sub_project
+ephorte
+uio_unit
+created_at
+updated_at
+```
+
+Base fields (inherited from BillingAccountBase):
+
+- `name`
+- `contact_point`
+- `contact_email`
+- `contact_telephone_number`
+- `customer_number`
+- `make_invoice`
+- `internal_customer`
+
+UiO-specific fields:
+
+- `usit_contact_point` — operational contact inside USIT
+- `main_agreement_id` — reference to the primary service agreement
+- `main_agreement_description` — description of the primary service agreement
+- `usit_accounting_place` — accounting classification for internal financial reporting
+- `usit_sub_project` — accounting classification for internal financial reporting
+- `ephorte` — optional reference to UiO document archive / case system
+- `uio_unit` — UiO organizational unit identifier
+
+Rules:
+
+- `price_list` (FK to PriceList, required) — each BillingAccount must use exactly one PriceList
+- `created_at` / `updated_at`
+
+---
+
 # Base Models
 
 ## TimestampedModel
@@ -232,7 +341,7 @@ period_start
 period_end
 currency
 status
-total_cost
+total_amount
 created_at
 finalized_at
 metadata
@@ -257,6 +366,10 @@ A matching finalized invoice must block regeneration entirely (finalized invoice
 
 A matching draft is replaced atomically when `force=true`.
 
+Invoice number assignment:
+
+`invoice_number` is `null` on draft invoices. It is assigned during finalization and is immutable once set.
+
 
 ---
 
@@ -272,32 +385,47 @@ invoice
 resource_type
 resource_id
 description
-billing_unit
 total_cost
 currency
 metadata
 ```
 
-Metadata must include `total_quantity_by_dimension` storing aggregate billed quantities per dimension.
+Metadata must include `billing_dimensions` and `total_quantity_by_dimension`.
 
-Example for VirtualMachine:
-```
-metadata.total_quantity_by_dimension = {
-  "cpu_count_days": "248",
-  "ram_gb_days": "992",
-  "disk_gb_days": "15500"
+Standard metadata structure for StorageHotel:
+
+```json
+{
+  "billing_dimensions": ["quota_tb"],
+  "total_quantity_by_dimension": {
+    "quota_tb_days": "3720"
+  }
 }
 ```
 
-For single-dimension resources like StorageHotel, a simpler key is used (e.g., `quota_tb_days`).
+Standard metadata structure for VirtualMachine:
+
+```json
+{
+  "billing_dimensions": ["cpu_count", "ram_gb", "disk_gb"],
+  "total_quantity_by_dimension": {
+    "cpu_count_days": "248",
+    "ram_gb_days": "992",
+    "disk_gb_days": "15500"
+  }
+}
+```
 
 Metadata may also include:
 ```
-billing_dimensions
 price_summary
 provisioner
 quota_unit
 ```
+
+Multi-dimension resources:
+
+For multi-dimension resources (e.g. VirtualMachine), one InvoiceLine is created per resource. The `total_cost` is the sum of all `InvoiceDailyCost` rows for that resource across all dimensions and all days in the billing period.
 
 ---
 
@@ -313,6 +441,7 @@ invoice
 resource_type
 resource_id
 date
+pricing_dimension
 daily_cost
 currency
 metadata
@@ -320,7 +449,11 @@ created_at
 ```
 
 Constraint:
-(invoice_id, resource_type, resource_id, date) UNIQUE
+(invoice_id, resource_type, resource_id, date, pricing_dimension) UNIQUE
+
+Fields:
+
+- `pricing_dimension` (CharField) — the billing dimension for this daily cost. For StorageHotel rows: `quota_tb`. For VirtualMachine rows: `cpu_count`, `ram_gb`, or `disk_gb`.
 
 Metadata may include:
 ```

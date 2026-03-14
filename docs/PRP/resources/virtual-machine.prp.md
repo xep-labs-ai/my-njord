@@ -77,7 +77,17 @@ created_at
 
 ---
 
-## Billing dimensions
+## Unit Conversion Rules
+
+VirtualMachine daily usage is captured and normalized for billing:
+
+- `cpu_count` → `cpu_count`: 1:1, no conversion
+- `ram_mb` → `ram_gb`: divide by 1024 (binary). Example: `ram_gb = Decimal(ram_mb) / Decimal("1024")`
+- `disks_total_gb` → `disk_gb`: 1:1, no conversion
+
+---
+
+## Billing Dimensions
 
 VirtualMachine uses per-dimension billing. Three dimensions are billable:
 
@@ -107,23 +117,34 @@ The daily usage row is a captured billing snapshot, not necessarily real runtime
 
 ---
 
-## Invoice expectations
+## Invoice Expectations
 
-`InvoiceLine.metadata` may include:
+For VirtualMachine invoices, `InvoiceLine.metadata` has this standard structure:
 
-```text
-total_cpu_days
-total_ram_mb_days
-total_disks_gb_days
-provisioner
+```json
+{
+  "billing_dimensions": ["cpu_count", "ram_gb", "disk_gb"],
+  "total_quantity_by_dimension": {
+    "cpu_count_days": "248",
+    "ram_gb_days": "992",
+    "disk_gb_days": "15500"
+  },
+  "provisioner": "VCENTER"
+}
 ```
+
+Note:
+
+- `cpu_count_days` = CPU count × days
+- `ram_gb_days` = RAM in GB × days (converted from MB before aggregation)
+- `disk_gb_days` = disk GB × days
 
 `InvoiceDailyCost.metadata` may include:
 
 ```text
 cpu_count
-ram_mb
-disks_total_gb
+ram_gb
+disk_gb
 ```
 
 ---

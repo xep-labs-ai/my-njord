@@ -31,7 +31,7 @@ Generate a draft invoice.
     {"resource_type": "storage_hotel", "resource_id": 101},
     {"resource_type": "virtual_machine", "resource_id": 205}
   ],
-  "autofill": true,
+  "autofill_missing_days": true,
   "force": false
 }
 ```
@@ -47,12 +47,12 @@ Generate a draft invoice.
 ```json
 {
   "id": "<invoice id>",
-  "invoice_number": "INV-2026-01-00001",
+  "invoice_number": null,
   "billing_account": "<id>",
   "period_start": "2026-01-01",
   "period_end": "2026-01-31",
   "status": "draft",
-  "total_cost": "1500.50",
+  "total_amount": "1500.50",
   "currency": "NOK",
   "created_at": "2026-01-15T10:30:00Z",
   "metadata": {
@@ -87,12 +87,12 @@ List invoices.
 [
   {
     "id": "<id>",
-    "invoice_number": "INV-2026-01-00001",
+    "invoice_number": null,
     "billing_account": "<id>",
     "period_start": "2026-01-01",
     "period_end": "2026-01-31",
     "status": "draft",
-    "total_cost": "1500.50",
+    "total_amount": "1500.50",
     "currency": "NOK",
     "created_at": "2026-01-15T10:30:00Z"
   }
@@ -113,12 +113,12 @@ Retrieve a single invoice with lines.
 ```json
 {
   "id": "<id>",
-  "invoice_number": "INV-2026-01-00001",
+  "invoice_number": null,
   "billing_account": "<id>",
   "period_start": "2026-01-01",
   "period_end": "2026-01-31",
   "status": "draft",
-  "total_cost": "1500.50",
+  "total_amount": "1500.50",
   "currency": "NOK",
   "created_at": "2026-01-15T10:30:00Z",
   "finalized_at": null,
@@ -135,10 +135,10 @@ Retrieve a single invoice with lines.
       "resource_type": "storage_hotel",
       "resource_id": 101,
       "description": "StorageHotel #101",
-      "billing_unit": "TB",
       "total_cost": "1500.50",
       "currency": "NOK",
       "metadata": {
+        "billing_dimensions": ["quota_tb"],
         "total_quantity_by_dimension": {
           "quota_tb_days": "31.5"
         },
@@ -176,10 +176,18 @@ Once finalized, the invoice becomes immutable.
   "invoice_number": "INV-2026-01-00001",
   "status": "finalized",
   "finalized_at": "2026-01-15T11:00:00Z",
-  "total_cost": "1500.50",
+  "total_amount": "1500.50",
   "currency": "NOK"
 }
 ```
+
+---
+
+## BillingAccount Reference
+
+In the request body, `billing_account` is the integer primary key of `BillingAccount`.
+
+Business fields such as `name`, `customer_number`, or accounting identifiers must not be used as the invoice-generation identifier.
 
 ---
 
@@ -207,7 +215,7 @@ Invoice generation must fail (return 400 or 409) if:
 - the selection is empty or ambiguous
 - the same resource is selected more than once
 - required pricing data is missing and `force=false`
-- required usage snapshots are missing and both `force=false` and `autofill=false`
+- required usage snapshots are missing and both `force=false` and `autofill_missing_days=false`
 - a matching finalized invoice already exists (immutability rule)
 - a matching draft invoice already exists (unless `force=true`)
 
@@ -247,11 +255,11 @@ When an invoice generation request is made:
 
 When `force=true` is passed:
 
-- If a matching draft invoice exists, it is replaced atomically
+- If a matching draft invoice exists, it is deleted with all its children (InvoiceLines, InvoiceDailyCosts) in the same transaction, and a new draft is created. The old invoice number (if any) is not reused.
 - If a matching finalized invoice exists, invoice generation fails (immutability)
 - Missing data that would normally fail is allowed, according to the billing engine rules
 - The invoice metadata will reflect that `force` was used
-- If `force=true` and `autofill=false`, missing days are billed at zero
+- If `force=true` and `autofill_missing_days=false`, missing days are billed at zero
 
 ---
 
