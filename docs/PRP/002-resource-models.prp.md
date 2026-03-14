@@ -187,16 +187,30 @@ created_at
 Fields:
 
 ```
+id
 invoice_number
 billing_account
 period_start
 period_end
 currency
 status
+total_cost
 created_at
 finalized_at
 metadata
 ```
+
+Metadata may include:
+```
+selection_scope
+selected_resource_types
+selected_resource_ids
+force
+autofill_missing_days
+incomplete
+missing_data_summary
+```
+
 
 ---
 
@@ -215,8 +229,18 @@ description
 billing_unit
 total_billed_amount
 unit_price_snapshot
-total_cost_nok
+total_cost
+currency
 metadata
+```
+
+Metadata may include:
+```
+billing_dimensions
+total_quantity_by_dimension
+price_summary
+provisioner
+quota_unit
 ```
 
 ---
@@ -228,19 +252,26 @@ Daily billing breakdown.
 Fields:
 
 ```
+id
 invoice
-resource_id
 resource_type
+resource_id
 date
-usage_raw
-usage_normalized
-discount_applied
-price_used
 daily_cost
+currency
+metadata
+created_at
 ```
 
 Constraint:
+(invoice_id, resource_type, resource_id, date) UNIQUE
 
+Metadata may include:
 ```
-(invoice_id, resource_id, date) UNIQUE
+normalized_usage
+resolved_prices
+dimension_costs
+autofilled
+source_snapshot_date
+missing_data_flags
 ```

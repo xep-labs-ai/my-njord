@@ -49,6 +49,14 @@ invoice_total = Σ daily_cost
 
 ---
 
+# Invoice Snapshots
+
+Invoice snapshots must retain enough resource-identifying data to remain understandable after invoice finalization, even if the live resource later changes, is renamed, or is soft-deleted.
+
+For that reason, InvoiceLine.metadata and InvoiceDailyCost.metadata should include a frozen resource snapshot containing the minimal identifying attributes needed for audit and display.
+
+---
+
 # Rounding
 
 Internal calculations:
@@ -60,7 +68,7 @@ Decimal high precision
 Customer totals:
 
 ```
-2 decimals NOK
+2 decimals applying only at the final output after calculations
 ```
 
 ---
@@ -84,12 +92,16 @@ Fields:
 ```
 price_list
 resource_type
-price_nok_per_unit_year
-discount_price_nok_per_unit_year
-discount_threshold
+pricing_dimension
+
+price_per_unit_year
+price_currency
+
+discount_price_per_unit_year
+discount_threshold_quantity
+
 effective_from
-effective_to
-```
+effective_to```
 
 Rules:
 
@@ -113,7 +125,10 @@ Rules:
 ```
 usage >= threshold → discounted price
 usage < threshold → normal price
+
 ```
+
+If discount_threshold is null, discount does not apply
 
 ---
 
