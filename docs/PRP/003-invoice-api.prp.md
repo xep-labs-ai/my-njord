@@ -22,7 +22,7 @@ Generate a draft invoice.
 
 ```json
 {
-  "billing_account": "<id or identifier>",
+  "billing_account": 1,
   "period_start": "2026-01-01",
   "period_end": "2026-01-31",
   "selection_scope": "all_resources|resource_types|explicit_resources",
@@ -84,19 +84,24 @@ List invoices.
 **Response body:**
 
 ```json
-[
-  {
-    "id": "<id>",
-    "invoice_number": null,
-    "billing_account": "<id>",
-    "period_start": "2026-01-01",
-    "period_end": "2026-01-31",
-    "status": "draft",
-    "total_amount": "1500.50",
-    "currency": "NOK",
-    "created_at": "2026-01-15T10:30:00Z"
-  }
-]
+{
+  "count": 42,
+  "next": "http://api/v1/invoices/?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": "<id>",
+      "invoice_number": null,
+      "billing_account": 1,
+      "period_start": "2026-01-01",
+      "period_end": "2026-01-31",
+      "status": "draft",
+      "total_amount": null,
+      "currency": "NOK",
+      "created_at": "2026-01-15T10:30:00Z"
+    }
+  ]
+}
 ```
 
 ### GET /api/v1/invoices/{id}/
@@ -218,6 +223,7 @@ Invoice generation must fail (return 400 or 409) if:
 - required usage snapshots are missing and both `force=false` and `autofill_missing_days=false`
 - a matching finalized invoice already exists (immutability rule)
 - a matching draft invoice already exists (unless `force=true`)
+- `billing_account.make_invoice = False` (return 400)
 
 ---
 

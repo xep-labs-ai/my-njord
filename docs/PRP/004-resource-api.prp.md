@@ -155,7 +155,7 @@ Ingest a daily quota snapshot.
 ```json
 {
   "date": "2026-01-15",
-  "quota_value": "5000"
+  "quota_raw": "5000"
 }
 ```
 
@@ -174,7 +174,7 @@ Ingest a daily quota snapshot.
 **Validation rules:**
 
 - `date` must be <= today (no future-dated snapshots)
-- `quota_value` must be a positive number or zero
+- `quota_raw` must be a positive number or zero
 - If a snapshot already exists for the same storage hotel and date, return 409 Conflict — no silent overwrite
 
 ---
@@ -343,5 +343,21 @@ Common error responses for all endpoints:
 - **404 Not Found** — resource not found
 - **409 Conflict** — duplicate snapshot for same resource and date
 - **422 Unprocessable Entity** — business rule violation (e.g., billing account mismatch)
+
+---
+
+## Resource Status Lifecycle Transitions
+
+Resources are created with `status = UNASSIGNED`. Status transitions happen via PATCH.
+
+Allowed transitions:
+
+- `UNASSIGNED` → `ACTIVE` — requires `billing_account` and `active_from` to be set
+- `ACTIVE` → `RETIRED` — must set `active_to` in the same PATCH
+- `RETIRED` → `ACTIVE` — **not allowed** (prevents accidental rebilling)
+
+`billing_account` is optional on resource creation. A resource can be created without a billing account and remain `UNASSIGNED` until assigned.
+
+When patching `status = RETIRED`, the request must include `active_to`. If `active_to` is missing, the request returns 400.
 
 ---

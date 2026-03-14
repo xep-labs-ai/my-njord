@@ -122,21 +122,20 @@ Daily billing uses quota converted to TB, then applies the effective yearly pric
 
 ## Invoice expectations
 
-`InvoiceLine.metadata` may include:
+`InvoiceLine.metadata` standard structure:
 
-```text
-total_quota_days_tb
-quota_unit
-filesystem_identifier
+```json
+{
+  "billing_dimensions": ["quota_tb"],
+  "total_quantity_by_dimension": {
+    "quota_tb_days": "3720"
+  }
+}
 ```
 
-`InvoiceDailyCost.metadata` may include:
+`InvoiceDailyCost.metadata` required fields: `normalized_usage`, `resolved_prices`, `autofilled`.
 
-```text
-quota_raw
-quota_tb
-quota_unit
-```
+Optional fields: `source_snapshot_date`, `dimension_costs`, `missing_data_flags`, `resource_snapshot`.
 
 ---
 

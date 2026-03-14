@@ -23,12 +23,12 @@ internal_customer
 Rules:
 
 - `name` (CharField, required)
-- `contact_point` (CharField)
-- `contact_email` (EmailField)
-- `contact_telephone_number` (CharField)
-- `customer_number` (CharField)
-- `make_invoice` (BooleanField, default=True) — controls whether invoice generation runs for this account. Resources belonging to an account where `make_invoice = False` are excluded from all invoice generation runs silently.
-- `internal_customer` (BooleanField)
+- `contact_point` (CharField, optional, blank=True, null=True)
+- `contact_email` (EmailField, optional, blank=True, null=True)
+- `contact_telephone_number` (CharField, optional, blank=True, null=True)
+- `customer_number` (CharField, optional, unique when set, blank=True, null=True)
+- `make_invoice` (BooleanField, default=True) — controls whether invoice generation runs for this account. Resources belonging to an account where `make_invoice = False` are excluded from all invoice generation runs. The `POST /api/v1/invoices/generate` endpoint returns 400 if the billing account has `make_invoice = False`.
+- `internal_customer` (BooleanField, default=True)
 
 Purpose:
 
@@ -108,7 +108,10 @@ UiO-specific fields:
 
 Rules:
 
+- `id` (integer PK)
+- `name` (CharField, required, unique)
 - `price_list` (FK to PriceList, required) — each BillingAccount must use exactly one PriceList
+- All UiO-specific fields: optional (blank=True, null=True)
 - `created_at` / `updated_at`
 
 ---
@@ -351,7 +354,7 @@ Metadata may include:
 ```
 selection_scope
 selected_resource_types
-selected_resource_ids
+explicit_resources
 force
 autofill_missing_days
 incomplete
@@ -369,6 +372,19 @@ A matching draft is replaced atomically when `force=true`.
 Invoice number assignment:
 
 `invoice_number` is `null` on draft invoices. It is assigned during finalization and is immutable once set.
+
+Field types:
+
+- `invoice_number` — CharField(max_length=20), nullable, unique when set (fits `INV-YYYY-mm-NNNNN`)
+- `billing_account` — FK to BillingAccount, required
+- `period_start` — DateField, required
+- `period_end` — DateField, required
+- `currency` — CharField(max_length=3, default="NOK")
+- `status` — CharField(max_length=20, choices=["draft", "finalized"], default="draft")
+- `total_amount` — DecimalField(max_digits=12, decimal_places=2), nullable (null until finalized)
+- `metadata` — JSONField(default=dict)
+- `finalized_at` — DateTimeField, nullable
+- `created_at` / `updated_at` — DateTimeField, auto
 
 
 ---
@@ -427,6 +443,15 @@ Multi-dimension resources:
 
 For multi-dimension resources (e.g. VirtualMachine), one InvoiceLine is created per resource. The `total_cost` is the sum of all `InvoiceDailyCost` rows for that resource across all dimensions and all days in the billing period.
 
+Field types:
+
+- `invoice` — FK to Invoice, required
+- `resource_type` — CharField(max_length=50), required
+- `resource_id` — PositiveIntegerField, required
+- `description` — CharField(max_length=255), optional (blank=True, null=True)
+- `total_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision, not rounded)
+- `metadata` — JSONField(default=dict)
+
 ---
 
 # InvoiceDailyCost
@@ -453,14 +478,27 @@ Constraint:
 
 Fields:
 
-- `pricing_dimension` (CharField) — the billing dimension for this daily cost. For StorageHotel rows: `quota_tb`. For VirtualMachine rows: `cpu_count`, `ram_gb`, or `disk_gb`.
+Field types:
 
-Metadata may include:
-```
-normalized_usage
-resolved_prices
-dimension_costs
-autofilled
-source_snapshot_date
-missing_data_flags
-```
+- `invoice` — FK to Invoice, required
+- `resource_type` — CharField(max_length=50), required
+- `resource_id` — PositiveIntegerField, required
+- `pricing_dimension` — CharField(max_length=50), required. For StorageHotel rows: `quota_tb`. For VirtualMachine rows: `cpu_count`, `ram_gb`, or `disk_gb`.
+- `date` — DateField, required
+- `daily_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision)
+- `metadata` — JSONField(default=dict)
+
+Metadata — required fields (must always be present for audit reproducibility):
+
+- `normalized_usage` — the usage value after unit conversion used in the billing calculation
+- `resolved_prices` — the price(s) per unit applied on that day (from ResourcePrice)
+- `autofilled` — boolean, whether the usage was autofilled (true) or from a real snapshot (false)
+
+Metadata — optional fields:
+
+- `source_snapshot_date` — when autofilled, the date of the original snapshot carried forward
+- `dimension_costs` — per-dimension cost breakdown (strongly recommended for multi-dimension resources)
+- `missing_data_flags` — additional diagnostic information
+- `resource_snapshot` — snapshot of the raw resource data at billing time
+
+Note: InvoiceDailyCost does not have a FK to InvoiceLine. The relationship is resolved through tuple matching on `(invoice, resource_type, resource_id)`. This is intentional — it avoids FK management complexity during draft replacement.

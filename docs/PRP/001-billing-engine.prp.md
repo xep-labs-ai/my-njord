@@ -77,6 +77,7 @@ Detailed rounding rule:
 - `InvoiceLine.total_cost` remains at full `Decimal` precision
 - `Invoice.total_amount` is rounded to 2 decimal places NOK
 - Rounding happens once at the invoice level, not per line
+- Required rounding method: `ROUND_HALF_UP`
 
 The difference between `Invoice.total_amount` (rounded, 2 decimals) and `InvoiceLine.total_cost` (full precision) is intentional:
 - `total_amount` is the customer-visible total
@@ -159,28 +160,26 @@ Defines effective-dated pricing.
 
 Fields:
 
-```
-price_list
-resource_type
-pricing_dimension
-
-price_per_unit_year
-price_currency
-
-discount_price_per_unit_year
-discount_threshold_quantity
-
-effective_from
-effective_to
-```
+- `price_list` — FK to PriceList, required
+- `resource_type` — CharField(max_length=50), required
+- `pricing_dimension` — CharField(max_length=50), required
+- `price_per_unit_year` — DecimalField(max_digits=14, decimal_places=4), required
+- `price_currency` — CharField(max_length=3, default="NOK")
+- `discount_price_per_unit_year` — DecimalField(max_digits=14, decimal_places=4), nullable (null = no discount price)
+- `discount_threshold_quantity` — DecimalField(max_digits=14, decimal_places=4), nullable (null = discount does not apply)
+- `effective_from` — DateField, required
+- `effective_to` — DateField, nullable (null = open-ended)
+- `created_at` — DateTimeField, auto_now_add
 
 Rules:
 
-- price rows **never updated**
-- new pricing → insert new rows
+- price rows **never updated** — no PATCH or PUT endpoint exists for ResourcePrice
+- new pricing → insert new rows with adjusted effective dates
+- to correct a price: set `effective_to` on the existing row and create a new row
 - `effective_to` is **inclusive** — the price is valid on that day
 - `effective_to = null` means open-ended (no expiration)
 - No two `ResourcePrice` rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges — enforced at the service layer
+- ResourcePrice is managed via API (see `005-pricing-api.prp.md`)
 
 ---
 
@@ -253,9 +252,11 @@ finalized
 
 ## Generate draft
 
+Pre-condition: `billing_account.make_invoice` must be `True`. If `make_invoice = False`, invoice generation must fail with a validation error before any resources are evaluated.
+
 Steps:
 
-1. identify active resources
+1. identify billable resources — must satisfy all conditions in the Billable Resource Rule (billing_account not null, `make_invoice = True`, within active window, included by selection)
 2. validate usage completeness
 3. apply optional autofill
 4. compute daily costs

@@ -151,12 +151,16 @@ ACTIVE
 RETIRED
 ```
 
-Billing rule:
+Billing rule (per day):
 
 ```
-status == ACTIVE
-AND billing_account != NULL
+billing_account IS NOT NULL
+AND billing_account.make_invoice = True
+AND active_from <= day
+AND (active_to IS NULL OR day <= active_to)
 ```
+
+`status` represents the resource's current lifecycle state but does not determine historical billability. See `001-billing-engine.prp.md` for the authoritative billing rule.
 
 ---
 
