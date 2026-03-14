@@ -19,3 +19,12 @@ repos:
           - drf-spectacular>=0.27
         args: [--config-file=pyproject.toml]
         pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: django-doctor
+        name: django-doctor
+        entry: django-doctor check
+        language: system
+        types: [python]
+        pass_filenames: false

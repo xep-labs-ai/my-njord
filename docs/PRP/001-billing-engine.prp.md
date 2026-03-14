@@ -68,8 +68,68 @@ Decimal high precision
 Customer totals:
 
 ```
-2 decimals applying only at the final output after calculations
+2 decimals NOK applying only at the invoice total after all calculations
 ```
+
+Detailed rounding rule:
+
+- `InvoiceDailyCost` rows remain at full `Decimal` precision
+- `InvoiceLine.total_cost` remains at full `Decimal` precision
+- `Invoice.total_amount` is rounded to 2 decimal places NOK
+- Rounding happens once at the invoice level, not per line
+
+---
+
+# Allowed Pricing Dimensions
+
+Define the allowed `pricing_dimension` values:
+
+**StorageHotel:**
+- `quota_tb`
+
+**VirtualMachine:**
+- `cpu_count`
+- `ram_gb`
+- `disk_gb`
+
+The billing engine matches `ResourcePrice` rows using `(resource_type, pricing_dimension)`.
+
+---
+
+# Explicit Resource Selection Format
+
+Explicit resource selection must use `(resource_type, resource_id)` pairs rather than a plain list of IDs.
+
+Recommended input shape:
+
+```json
+explicit_resources = [
+  {"resource_type": "storage_hotel", "resource_id": 101},
+  {"resource_type": "virtual_machine", "resource_id": 205}
+]
+```
+
+This approach is consistent with the existing `resource_type + resource_id` pattern used by `InvoiceLine` and `InvoiceDailyCost`.
+
+---
+
+# Force Mode and Missing Data
+
+When `force=true` and `autofill_missing_days=false`:
+
+Resources with missing days are billed at **zero** for those missing days. The invoice line is included with zero cost.
+
+Missing days must be reported in the invoice generation response.
+
+---
+
+# Duplicate Invoice Prevention
+
+There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
+
+A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
+
+A matching draft is replaced atomically when `force=true`.
 
 ---
 

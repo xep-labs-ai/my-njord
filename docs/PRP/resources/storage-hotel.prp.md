@@ -19,6 +19,8 @@ name
 filesystem_identifier
 quota_unit
 status
+active_from
+active_to
 created_at
 updated_at
 deleted_at
@@ -91,6 +93,25 @@ TB
 
 Conversion is based on `quota_unit`.
 
+## Unit Conversion Rules
+
+Billing unit is decimal **TB** (10^12 bytes).
+
+Conversion formulas:
+
+- `KB → TB`: divide by 1,000,000,000 (`Decimal("1e-9")`)
+- `KIB → TB`: multiply by 1024, then divide by 1,000,000,000,000 (i.e., `Decimal("1024") / Decimal("1e12")`)
+
+---
+
+## Soft-Delete Invariants
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
+
 ---
 
 ## Billing notes
@@ -122,9 +143,9 @@ quota_unit
 ## API endpoints
 
 ```text
-POST   /storage-hotels/
-GET    /storage-hotels/
-GET    /storage-hotels/{id}/
-PATCH  /storage-hotels/{id}/
-POST   /storage-hotels/{id}/quota
+POST   /api/v1/storage-hotels/
+GET    /api/v1/storage-hotels/
+GET    /api/v1/storage-hotels/{id}/
+PATCH  /api/v1/storage-hotels/{id}/
+POST   /api/v1/storage-hotels/{id}/quota
 ```

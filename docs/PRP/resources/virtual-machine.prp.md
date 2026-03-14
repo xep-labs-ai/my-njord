@@ -18,6 +18,8 @@ billing_account
 name
 status
 provisioner
+active_from
+active_to
 created_at
 updated_at
 deleted_at
@@ -75,19 +77,27 @@ created_at
 
 ---
 
-## Billing unit
+## Billing dimensions
 
-This resource may require more than one normalized billing measure.
-
-Examples:
+VirtualMachine uses per-dimension billing. Three dimensions are billable:
 
 ```text
 cpu_count
-ram_mb
-disks_total_gb
+ram_gb
+disk_gb
 ```
 
-The exact v1 pricing strategy must define whether billing is based on one combined capacity formula or separate dimensions.
+Each dimension has its own daily `InvoiceDailyCost` row, allowing independent pricing and discounts per dimension.
+
+---
+
+## Soft-Delete Invariants
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
 
 ---
 
@@ -121,9 +131,9 @@ disks_total_gb
 ## API endpoints
 
 ```text
-POST   /virtual-machines/
-GET    /virtual-machines/
-GET    /virtual-machines/{id}/
-PATCH  /virtual-machines/{id}/
-POST   /virtual-machines/{id}/usage
+POST   /api/v1/virtual-machines/
+GET    /api/v1/virtual-machines/
+GET    /api/v1/virtual-machines/{id}/
+PATCH  /api/v1/virtual-machines/{id}/
+POST   /api/v1/virtual-machines/{id}/usage
 ```

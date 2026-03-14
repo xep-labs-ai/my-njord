@@ -35,13 +35,21 @@ created_at
 
 Base model for billable resources.
 
+This is a **Django abstract model** (`abstract = True`). The `resource_type + resource_id` pattern on InvoiceLine and InvoiceDailyCost is the correct cross-resource reference strategy.
+
 Fields:
 
 ```
 billing_account
 name
 status
+active_from
+active_to
 ```
+
+`active_from` (date, required): the first day the resource is billable.
+
+`active_to` (date, nullable): the last day the resource is billable. `null` means open-ended (no end date).
 
 Status lifecycle:
 
@@ -50,6 +58,16 @@ UNASSIGNED
 ACTIVE
 RETIRED
 ```
+
+Per-day billability rule:
+
+A resource is billable for a given day only if:
+
+- `billing_account IS NOT NULL`
+- `active_from <= day`
+- `active_to IS NULL OR day <= active_to`
+
+If `status == RETIRED`, `active_to` should be set to the final billable day.
 
 ---
 
@@ -64,6 +82,8 @@ billing_account
 filesystem_identifier
 quota_unit
 status
+active_from
+active_to
 created_at
 updated_at
 deleted_at
@@ -75,6 +95,14 @@ Quota units:
 KB
 KIB
 ```
+
+Soft-delete semantics:
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources; billing and audit workflows can access them
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
 
 ---
 
@@ -127,6 +155,8 @@ billing_account
 name
 status
 provisioner
+active_from
+active_to
 created_at
 updated_at
 deleted_at
@@ -137,6 +167,14 @@ Provisioners:
 ```
 VCENTER
 ```
+
+Soft-delete semantics:
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources; billing and audit workflows can access them
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
 
 ---
 
@@ -211,6 +249,14 @@ incomplete
 missing_data_summary
 ```
 
+Uniqueness constraint:
+
+There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
+
+A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
+
+A matching draft is replaced atomically when `force=true`.
+
 
 ---
 
@@ -227,17 +273,27 @@ resource_type
 resource_id
 description
 billing_unit
-total_billed_amount
-unit_price_snapshot
 total_cost
 currency
 metadata
 ```
 
-Metadata may include:
+Metadata must include `total_quantity_by_dimension` storing aggregate billed quantities per dimension.
+
+Example for VirtualMachine:
+```
+metadata.total_quantity_by_dimension = {
+  "cpu_count_days": "248",
+  "ram_gb_days": "992",
+  "disk_gb_days": "15500"
+}
+```
+
+For single-dimension resources like StorageHotel, a simpler key is used (e.g., `quota_tb_days`).
+
+Metadata may also include:
 ```
 billing_dimensions
-total_quantity_by_dimension
 price_summary
 provisioner
 quota_unit
