@@ -25,9 +25,6 @@ dev = [
     "pytest-cov>=5.0",
     "django-extensions>=4.1",
     "pre-commit>=3.7",
-]
-
-quality = [
     "django-doctor>=2.2.0",
 ]
 

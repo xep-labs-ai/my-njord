@@ -104,12 +104,16 @@ Conversion formulas:
 
 ---
 
+## Manager Availability
+
+StorageHotel inherits the `billing_objects` manager from ResourceModel. This manager includes soft-deleted resources, which is necessary for the billing engine to bill historical periods.
+
 ## Soft-Delete Invariants
 
 - If `deleted_at` is set, `status` must be `RETIRED`
 - If `deleted_at` is set, `active_to` must be set
 - `active_to` must be on or before the calendar date of `deleted_at`
-- Default querysets exclude soft-deleted resources
+- Default querysets exclude soft-deleted resources; use `billing_objects` manager for billing operations
 - Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
 
 ---
@@ -129,9 +133,12 @@ Daily billing uses quota converted to TB, then applies the effective yearly pric
   "billing_dimensions": ["quota_tb"],
   "total_quantity_by_dimension": {
     "quota_tb_days": "3720"
-  }
+  },
+  "quota_unit": "KB"
 }
 ```
+
+Note: `quota_unit` is a required field in InvoiceLine metadata for StorageHotel to enable audit verification of unit conversion.
 
 `InvoiceDailyCost.metadata` required fields: `normalized_usage`, `resolved_prices`, `autofilled`.
 

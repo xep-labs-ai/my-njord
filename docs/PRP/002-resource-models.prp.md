@@ -149,6 +149,18 @@ Base model for billable resources.
 
 This is a **Django abstract model** (`abstract = True`). The `resource_type + resource_id` pattern on InvoiceLine and InvoiceDailyCost is the correct cross-resource reference strategy.
 
+## Managers
+
+### Default manager
+
+The default manager excludes soft-deleted resources (those with `deleted_at` set).
+
+### `billing_objects` manager
+
+A dedicated manager for the billing engine that **includes soft-deleted resources**. This is necessary because the billing engine must be able to bill historical periods for resources that have since been soft-deleted. The inclusion of a resource via `billing_objects` does not make it billable — per-day billability rules still apply (determined by `active_from`, `active_to`, and billing account assignment).
+
+All resource types that inherit from `ResourceModel` must have this manager available.
+
 Fields:
 
 ```
@@ -363,6 +375,8 @@ period_end
 currency
 status
 total_amount
+selection_scope
+selection_fingerprint
 created_at
 updated_at
 finalized_at
@@ -389,7 +403,7 @@ Metadata flag semantics:
 
 Uniqueness constraint:
 
-There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
+There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)`.
 
 A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
 
@@ -406,11 +420,17 @@ Field types:
 - `period_start` — DateField, required
 - `period_end` — DateField, required
 - `currency` — CharField(max_length=3, default="NOK")
+- `selection_scope` — CharField(max_length=50), required — identifies the selection category (e.g., "all_resources", "resource_types", "explicit_resources")
+- `selection_fingerprint` — CharField(max_length=128), required — deterministic hash of the canonical selection payload
 - `status` — CharField(max_length=20, choices=["draft", "finalized"], default="draft")
 - `total_amount` — DecimalField(max_digits=12, decimal_places=2), nullable — null only before generation runs; set during draft creation and updated on recalculation
 - `metadata` — JSONField(default=dict)
 - `finalized_at` — DateTimeField, nullable
 - `created_at` / `updated_at` — DateTimeField, auto
+
+## Currency Consistency Rule
+
+`InvoiceLine.currency` and `InvoiceDailyCost.currency` must match `Invoice.currency`. This is a service-layer invariant and may be enforced by a database check constraint.
 
 
 ---
@@ -458,9 +478,12 @@ Standard metadata structure for VirtualMachine:
 }
 ```
 
-Metadata must also include (resource-type-specific required fields):
+Metadata must also include:
 
-- `resource_snapshot` — frozen snapshot of the resource's identifying attributes at generation time (name, id, and resource-type-specific fields). Required for audit reproducibility.
+- `resource_snapshot` — **required** for all resources. Frozen snapshot of the resource's identifying attributes at generation time (name, id, and resource-type-specific fields). Required for audit reproducibility.
+
+Resource-type-specific required fields in metadata:
+
 - `quota_unit` — required for `resource_type = "storage_hotel"`. Needed to verify unit conversion at audit time.
 - `provisioner` — required for `resource_type = "virtual_machine"`. Records the provisioner at billing time.
 
@@ -489,6 +512,8 @@ Field types:
 
 Daily billing breakdown.
 
+There is **one `InvoiceDailyCost` row per resource per day**. For multi-dimension resources (e.g., VirtualMachine), the per-dimension usage and costs are stored in the row's `metadata` under `normalized_usage`, `resolved_prices`, and `dimension_costs`.
+
 Fields:
 
 ```
@@ -506,6 +531,8 @@ created_at
 
 Constraint:
 (invoice_id, resource_type, resource_id, date, pricing_dimension) UNIQUE
+
+Note: `pricing_dimension` is included in the unique constraint to support multi-dimension resources that may eventually require one row per dimension. For single-dimension resources (e.g., StorageHotel), this is a singleton tuple.
 
 Fields:
 

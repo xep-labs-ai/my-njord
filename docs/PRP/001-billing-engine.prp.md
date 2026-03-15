@@ -27,7 +27,9 @@ For each resource and each day:
 4. Resolve effective price
 5. Compute daily cost
 
-Formula:
+Daily cost calculation is **resource-type specific**. There is no universal formula applied to all resources.
+
+For resource types with yearly-prorated pricing, an illustrative formula is:
 
 ```
 daily_cost = usage × price_per_year / days_in_year(day)
@@ -38,6 +40,14 @@ Where:
 ```
 days_in_year(day) = 365 or 366
 ```
+
+For multi-dimension resources (e.g., VirtualMachine), the per-dimension daily costs are summed to produce the final `InvoiceDailyCost.daily_cost`:
+
+```
+InvoiceDailyCost.daily_cost = Σ dimension_daily_cost
+```
+
+Each resource type is responsible for defining its own daily cost formula, subject to the constraint that the result is deterministic and reproducible from persisted invoice snapshot data.
 
 ---
 
@@ -53,9 +63,9 @@ invoice_total = Σ daily_cost
 
 Invoice snapshots must retain enough resource-identifying data to remain understandable after invoice finalization, even if the live resource later changes, is renamed, or is soft-deleted.
 
-For that reason, `InvoiceLine.metadata` must include a frozen resource snapshot (`resource_snapshot`) containing the minimal identifying attributes needed for audit and display. This snapshot is captured at invoice generation time and remains fixed even if the live resource is later renamed, changed, or soft-deleted.
+`resource_snapshot` is **required** in `InvoiceLine.metadata`. It must contain the minimal identifying attributes needed for audit and display. This snapshot is captured at invoice generation time and remains fixed even if the live resource is later renamed, changed, or soft-deleted.
 
-`InvoiceDailyCost.metadata` may optionally include `resource_snapshot`, but it is not required — the InvoiceLine-level snapshot is sufficient for auditability.
+`InvoiceDailyCost.metadata` may optionally include `resource_snapshot`; it is not required at the daily-cost level — the InvoiceLine-level snapshot is sufficient for auditability.
 
 ---
 
@@ -172,6 +182,8 @@ When `autofill_missing_days=true` and no prior snapshot exists for a resource:
 - If `force=false`: entire invoice generation fails (fatal)
 - If `force=true`: the resource is billed at zero for all its missing days; reported in `missing_data_summary`; invoice marked `incomplete=true`
 
+Billing at zero is recorded clearly in the invoice metadata so that human review can identify the fallback behavior.
+
 **Invoice metadata flags — `incomplete` vs `provisional`:**
 
 These are independent flags in `Invoice.metadata`:
@@ -183,13 +195,35 @@ These are independent flags in `Invoice.metadata`:
 
 # Concurrency and Duplicate Prevention
 
-There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
+The `Invoice` model includes two new fields that are part of the invoice identity:
+
+- `selection_scope` — CharField, identifies the selection category (e.g., "all_resources", "resource_types", "explicit_resources")
+- `selection_fingerprint` — CharField, a deterministic hash of the canonical selection payload used to uniquely identify identical selections
+
+## Canonicalization Rules for Fingerprint Computation
+
+Before hashing:
+
+- `resource_types` must be sorted alphabetically
+- `explicit_resources` must be normalized to `(resource_type, resource_id)` tuples and sorted deterministically (by resource_type first, then by resource_id)
+- `selection_scope` is included in the hash input
+
+## Duplicate Prevention Behavior
+
+There must be at most one draft invoice per `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)`.
 
 A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
 
 A matching draft is replaced atomically when `force=true`.
 
-To prevent race conditions when two invoice generation requests arrive simultaneously for the same `(billing_account, period_start, period_end)`, the system uses a PostgreSQL advisory lock keyed on these three values within the invoice generation transaction. This ensures that the duplicate check and invoice creation are atomic.
+## Concurrency Control
+
+To prevent race conditions when two invoice generation requests arrive simultaneously for the same `(billing_account, period_start, period_end)`, the system uses a PostgreSQL advisory lock keyed on these three values within the invoice generation transaction.
+
+Inside the locked transaction:
+
+1. Check for a finalized invoice matching `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)` → if found, fail
+2. Check for a draft invoice matching the same tuple → if found and `force=false`, fail; if found and `force=true`, replace atomically
 
 ---
 
@@ -227,7 +261,7 @@ Rules:
 - to correct a price: set `effective_to` on the existing row and create a new row
 - `effective_to` is **inclusive** — the price is valid on that day
 - `effective_to = null` means open-ended (no expiration)
-- No two `ResourcePrice` rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges — enforced at the service layer
+- No two `ResourcePrice` rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges — validated at the service layer and enforced by a PostgreSQL `daterange` exclusion constraint on the database
 - ResourcePrice is managed via API (see `005-pricing-api.prp.md`)
 
 ---
@@ -310,11 +344,15 @@ finalized
 
 ## Generate draft
 
-Pre-condition: `billing_account.make_invoice` must be `True`. If `make_invoice = False`, invoice generation must fail with a validation error before any resources are evaluated.
+Pre-flight validation (happens before any resource selection or per-day evaluation):
+
+- `billing_account.make_invoice` must be `True`. If `make_invoice = False`, invoice generation must fail immediately with a validation error.
+
+Resource identification and selection:
 
 Steps:
 
-1. identify billable resources — must satisfy all conditions in the Billable Resource Rule (billing_account not null, `make_invoice = True`, within active window, included by selection)
+1. identify billable resources — must satisfy all conditions in the Billable Resource Rule (billing_account not null, within active window, included by selection)
 2. validate usage completeness
 3. apply optional autofill
 4. compute daily costs

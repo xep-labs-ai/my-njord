@@ -253,8 +253,8 @@ Create a new ResourcePrice row.
 
 **Validation:**
 
-- No two ResourcePrice rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges
-- `effective_to` must be after `effective_from` if set
+- No two ResourcePrice rows for the same `(price_list, resource_type, pricing_dimension)` may have overlapping effective date ranges — validated at the service layer (for clear API error messages) and enforced by a PostgreSQL `daterange` exclusion constraint (authoritative enforcement)
+- `effective_to` must be >= `effective_from` if set (a single-day price range is valid)
 - `price_per_unit_year` must be positive
 - `discount_price_per_unit_year` must be positive if set
 - Returns 400 on validation failure, 409 on date range overlap
@@ -285,9 +285,11 @@ Retrieve a single ResourcePrice row.
 
 ---
 
-### PATCH /api/v1/price-lists/{price_list_id}/resource-prices/{id}/effective-to
+### PATCH /api/v1/price-lists/{price_list_id}/resource-prices/{id}/set-effective-to/
 
 Sets `effective_to` on an **open-ended** ResourcePrice row (one with `effective_to = null`). This is the only mutation allowed on a ResourcePrice row after creation.
+
+This endpoint uses a dedicated DRF `@action` named `set_effective_to` to constrain this specific lifecycle operation.
 
 Time-bounded rows (those with `effective_to` already set) are immutable — to correct a time-bounded row, create a new row with the correct dates instead.
 
@@ -301,7 +303,7 @@ Time-bounded rows (those with `effective_to` already set) are immutable — to c
 
 **Validation:**
 
-- `effective_to` must be >= `effective_from`
+- `effective_to` must be >= `effective_from` (a single-day price range is valid)
 - `effective_to` must not overlap with any existing row for the same `(price_list, resource_type, pricing_dimension)`
 - This endpoint only works on open-ended rows (where `effective_to` is currently null). If the row already has an `effective_to` set, return 409.
 

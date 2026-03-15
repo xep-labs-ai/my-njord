@@ -37,6 +37,8 @@ VCENTER
 
 ### VirtualMachineDailyUsage
 
+All three daily usage fields are **required and non-nullable** in v1. Partial snapshots are not allowed. Autofill always carries forward a complete state.
+
 Fields:
 
 ```text
@@ -101,12 +103,18 @@ Each dimension has its own daily `InvoiceDailyCost` row, allowing independent pr
 
 ---
 
+## Manager Availability
+
+VirtualMachine inherits the `billing_objects` manager from ResourceModel. This manager includes soft-deleted resources, which is necessary for the billing engine to bill historical periods.
+
+---
+
 ## Soft-Delete Invariants
 
 - If `deleted_at` is set, `status` must be `RETIRED`
 - If `deleted_at` is set, `active_to` must be set
 - `active_to` must be on or before the calendar date of `deleted_at`
-- Default querysets exclude soft-deleted resources
+- Default querysets exclude soft-deleted resources; use `billing_objects` manager for billing operations
 - Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
 
 ---
@@ -129,15 +137,27 @@ For VirtualMachine invoices, `InvoiceLine.metadata` has this standard structure:
     "ram_gb_days": "992",
     "disk_gb_days": "15500"
   },
-  "provisioner": "VCENTER"
+  "provisioner": "VCENTER",
+  "resource_snapshot": {
+    "id": 205,
+    "name": "vm-prod-001",
+    "provisioner": "VCENTER"
+  }
 }
 ```
+
+Required fields in `InvoiceLine.metadata`:
+
+- `resource_snapshot` — frozen resource snapshot for audit reproducibility
+- `provisioner` — records the provisioner at billing time
 
 Note:
 
 - `cpu_count_days` = CPU count × days
 - `ram_gb_days` = RAM in GB × days (converted from MB before aggregation)
 - `disk_gb_days` = disk GB × days
+
+---
 
 `InvoiceDailyCost.metadata` required fields (same as all resources):
 
@@ -150,8 +170,9 @@ Optional fields (VM-specific):
 - `cpu_count` — normalized cpu_count value used
 - `ram_gb` — normalized ram_gb value used (converted from ram_mb)
 - `disk_gb` — normalized disk_gb value used
-- `dimension_costs` — per-dimension cost breakdown
+- `dimension_costs` — per-dimension cost breakdown (strongly recommended for multi-dimension resource validation)
 - `source_snapshot_date` — when autofilled, the date of the original snapshot
+- `resource_snapshot` — optional at daily-cost level
 
 ---
 

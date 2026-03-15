@@ -284,6 +284,16 @@ No reverse transitions are allowed. A finalized invoice cannot return to draft.
 
 ---
 
+## No DELETE Endpoint for Draft Invoices (v1 Intentional Design)
+
+Draft invoices cannot be deleted via the API in v1. They are replaced through regeneration with `force=true`.
+
+Finalized invoices are immutable and cannot be modified or deleted.
+
+This intentional constraint ensures that invoice metadata and selection fingerprints remain auditable.
+
+---
+
 ## Optional Future Endpoints (v2+)
 
 These endpoints are noted for future development but are not part of v1:
