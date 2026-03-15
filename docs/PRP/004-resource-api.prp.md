@@ -31,7 +31,7 @@ Create a new StorageHotel resource.
 - `name` (CharField, required)
 - `filesystem_identifier` (CharField, required)
 - `quota_unit` (CharField, required) — values: `"KB"`, `"KIB"`
-- `billing_account` (integer PK, required)
+- `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required)
 - `active_to` (date, optional)
 
@@ -90,21 +90,26 @@ List StorageHotel resources.
 **Response (200):**
 
 ```json
-[
-  {
-    "id": 101,
-    "name": "storage-primary",
-    "filesystem_identifier": "/mnt/storage-primary",
-    "quota_unit": "KIB",
-    "billing_account": 1,
-    "status": "ACTIVE",
-    "active_from": "2026-01-01",
-    "active_to": null,
-    "created_at": "2026-01-15T10:00:00Z",
-    "updated_at": "2026-01-15T10:00:00Z",
-    "deleted_at": null
-  }
-]
+{
+  "count": 10,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 101,
+      "name": "storage-primary",
+      "filesystem_identifier": "/mnt/storage-primary",
+      "quota_unit": "KIB",
+      "billing_account": 1,
+      "status": "ACTIVE",
+      "active_from": "2026-01-01",
+      "active_to": null,
+      "created_at": "2026-01-15T10:00:00Z",
+      "updated_at": "2026-01-15T10:00:00Z",
+      "deleted_at": null
+    }
+  ]
+}
 ```
 
 ---
@@ -189,7 +194,7 @@ Create a new VirtualMachine resource.
 
 - `name` (CharField, required)
 - `provisioner` (CharField, required) — values: `"VCENTER"`
-- `billing_account` (integer PK, required)
+- `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required)
 - `active_to` (date, optional)
 
@@ -242,9 +247,31 @@ List VirtualMachine resources.
 - `status` (optional, string) — filter by status (UNASSIGNED, ACTIVE, RETIRED)
 - `provisioner` (optional, string) — filter by provisioner
 
-**Response (200):**
+**Response (200):** Paginated list.
 
-List of VirtualMachine objects.
+Example:
+
+```json
+{
+  "count": 5,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 205,
+      "name": "vm-compute-01",
+      "provisioner": "VCENTER",
+      "billing_account": 1,
+      "status": "ACTIVE",
+      "active_from": "2026-01-01",
+      "active_to": null,
+      "created_at": "2026-01-15T10:00:00Z",
+      "updated_at": "2026-01-15T10:00:00Z",
+      "deleted_at": null
+    }
+  ]
+}
+```
 
 ---
 

@@ -139,13 +139,19 @@ Note:
 - `ram_gb_days` = RAM in GB × days (converted from MB before aggregation)
 - `disk_gb_days` = disk GB × days
 
-`InvoiceDailyCost.metadata` may include:
+`InvoiceDailyCost.metadata` required fields (same as all resources):
 
-```text
-cpu_count
-ram_gb
-disk_gb
-```
+- `normalized_usage` — normalized daily usage value for this pricing dimension
+- `resolved_prices` — the price(s) per unit applied on that day
+- `autofilled` — boolean, whether usage was autofilled
+
+Optional fields (VM-specific):
+
+- `cpu_count` — normalized cpu_count value used
+- `ram_gb` — normalized ram_gb value used (converted from ram_mb)
+- `disk_gb` — normalized disk_gb value used
+- `dimension_costs` — per-dimension cost breakdown
+- `source_snapshot_date` — when autofilled, the date of the original snapshot
 
 ---
 

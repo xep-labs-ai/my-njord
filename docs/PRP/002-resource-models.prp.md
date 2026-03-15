@@ -159,9 +159,13 @@ active_from
 active_to
 ```
 
-`active_from` (date, required): the first day the resource is billable.
+Field types:
 
-`active_to` (date, nullable): the last day the resource is billable. `null` means open-ended (no end date).
+- `billing_account` — FK to BillingAccount, nullable (null = unassigned), on_delete=PROTECT
+- `name` — CharField(max_length=255), required, not unique
+- `status` — CharField(max_length=20, choices=["UNASSIGNED", "ACTIVE", "RETIRED"], default="UNASSIGNED")
+- `active_from` (date, required): the first day the resource is billable.
+- `active_to` (date, nullable): the last day the resource is billable. `null` means open-ended (no end date).
 
 Status lifecycle:
 
@@ -230,6 +234,10 @@ date
 quota_raw
 created_at
 ```
+
+Field types:
+
+- `quota_raw` — DecimalField(max_digits=25, decimal_places=4)
 
 Constraint:
 
@@ -304,6 +312,12 @@ ram_mb
 disks_total_gb
 created_at
 ```
+
+Field types:
+
+- `cpu_count` — PositiveIntegerField
+- `ram_mb` — DecimalField(max_digits=14, decimal_places=2)
+- `disks_total_gb` — DecimalField(max_digits=14, decimal_places=2)
 
 Constraint:
 
@@ -381,7 +395,7 @@ Field types:
 - `period_end` — DateField, required
 - `currency` — CharField(max_length=3, default="NOK")
 - `status` — CharField(max_length=20, choices=["draft", "finalized"], default="draft")
-- `total_amount` — DecimalField(max_digits=12, decimal_places=2), nullable (null until finalized)
+- `total_amount` — DecimalField(max_digits=12, decimal_places=2), nullable — null only before generation runs; set during draft creation and updated on recalculation
 - `metadata` — JSONField(default=dict)
 - `finalized_at` — DateTimeField, nullable
 - `created_at` / `updated_at` — DateTimeField, auto
@@ -450,6 +464,7 @@ Field types:
 - `resource_id` — PositiveIntegerField, required
 - `description` — CharField(max_length=255), optional (blank=True, null=True)
 - `total_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision, not rounded)
+- `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
 
 ---
@@ -486,6 +501,7 @@ Field types:
 - `pricing_dimension` — CharField(max_length=50), required. For StorageHotel rows: `quota_tb`. For VirtualMachine rows: `cpu_count`, `ram_gb`, or `disk_gb`.
 - `date` — DateField, required
 - `daily_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision)
+- `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
 
 Metadata — required fields (must always be present for audit reproducibility):

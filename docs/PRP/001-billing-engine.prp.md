@@ -203,6 +203,8 @@ usage < threshold → normal price
 
 If discount_threshold is null, discount does not apply
 
+For multi-dimension resources, the discount threshold on each `ResourcePrice` row is evaluated against the normalized daily usage value of that specific pricing dimension. Each dimension is evaluated independently.
+
 ---
 
 # Missing Usage Handling

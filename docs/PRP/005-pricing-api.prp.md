@@ -287,7 +287,9 @@ Retrieve a single ResourcePrice row.
 
 ### PATCH /api/v1/price-lists/{price_list_id}/resource-prices/{id}/effective-to
 
-A narrow endpoint to close an existing price row by setting its `effective_to` date. This is the only mutation allowed on a ResourcePrice row.
+Sets `effective_to` on an **open-ended** ResourcePrice row (one with `effective_to = null`). This is the only mutation allowed on a ResourcePrice row after creation.
+
+Time-bounded rows (those with `effective_to` already set) are immutable — to correct a time-bounded row, create a new row with the correct dates instead.
 
 **Request body:**
 
@@ -301,14 +303,14 @@ A narrow endpoint to close an existing price row by setting its `effective_to` d
 
 - `effective_to` must be >= `effective_from`
 - `effective_to` must not overlap with any existing row for the same `(price_list, resource_type, pricing_dimension)`
-- If the row is already closed (has an `effective_to`), returns 409
+- This endpoint only works on open-ended rows (where `effective_to` is currently null). If the row already has an `effective_to` set, return 409.
 
 **Response:**
 
 - 200: Updated ResourcePrice
 - 400: Validation error
 - 404: Not found
-- 409: Row already closed or overlap detected
+- 409: Row is not open-ended or overlap detected
 
 ---
 
