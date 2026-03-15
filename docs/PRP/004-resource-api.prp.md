@@ -387,4 +387,8 @@ Allowed transitions:
 
 When patching `status = RETIRED`, the request must include `active_to`. If `active_to` is missing, the request returns 400.
 
+When a resource transitions to `RETIRED` via PATCH, the service layer sets `deleted_at` to the current timestamp automatically. There is no dedicated DELETE endpoint in v1.
+
+Changing `active_from` or `active_to` on a resource that has been included in a finalized invoice is allowed. Finalized invoices are immutable and unaffected. The change only affects future invoice generation runs.
+
 ---

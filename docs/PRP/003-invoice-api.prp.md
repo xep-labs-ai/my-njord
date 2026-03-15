@@ -61,6 +61,7 @@ Generate a draft invoice.
     "autofill_missing_days": true,
     "force": false,
     "incomplete": false,
+    "provisional": false,
     "missing_data_summary": null
   }
 }
@@ -132,7 +133,8 @@ Retrieve a single invoice with lines.
     "selected_resource_types": ["storage_hotel"],
     "autofill_missing_days": true,
     "force": false,
-    "incomplete": false
+    "incomplete": false,
+    "provisional": false
   },
   "lines": [
     {
@@ -170,8 +172,7 @@ Once finalized, the invoice becomes immutable.
 
 - Status 200: Invoice finalized
 - Status 404: Invoice not found
-- Status 409: Invoice is already finalized or does not exist
-- Status 422: Cannot finalize a non-draft invoice
+- Status 409: Invoice is already finalized (idempotency conflict)
 
 **Response body:**
 
@@ -219,11 +220,13 @@ Invoice generation must fail (return 400 or 409) if:
 - requested resource types are unknown or unsupported
 - the selection is empty or ambiguous
 - the same resource is selected more than once
-- required pricing data is missing and `force=false`
+- required pricing data is missing (always fatal, even with `force=true`)
 - required usage snapshots are missing and both `force=false` and `autofill_missing_days=false`
 - a matching finalized invoice already exists (immutability rule)
 - a matching draft invoice already exists (unless `force=true`)
 - `billing_account.make_invoice = False` (return 400)
+- `period_start` is after `period_end` (return 400)
+- `period_end > today` and `autofill_missing_days` is not `true` (return 400)
 
 ---
 

@@ -185,6 +185,10 @@ A resource is billable for a given day only if:
 
 If `status == RETIRED`, `active_to` should be set to the final billable day.
 
+**Patching `active_from`/`active_to` after finalized invoices:**
+
+Changing `active_from` or `active_to` on a resource that has been included in a finalized invoice is allowed. Finalized invoices are immutable by design and represent a point-in-time calculation. The change only affects future invoice generation runs.
+
 ---
 
 # StorageHotel
@@ -360,6 +364,7 @@ currency
 status
 total_amount
 created_at
+updated_at
 finalized_at
 metadata
 ```
@@ -372,8 +377,15 @@ explicit_resources
 force
 autofill_missing_days
 incomplete
+provisional
 missing_data_summary
 ```
+
+Metadata flag semantics:
+
+- `incomplete` (boolean) — `true` when `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill, and the system used fallback behavior (e.g., zero-cost billing). `false` when all resource-days were resolved from real snapshots or successful carry-forward autofill.
+- `provisional` (boolean) — `true` when `period_end > today` at generation time; the invoice covers future days filled via autofill. Defaults to `false`.
+- `missing_data_summary` — present when `incomplete=true`; reports which resources had missing days.
 
 Uniqueness constraint:
 
@@ -446,11 +458,15 @@ Standard metadata structure for VirtualMachine:
 }
 ```
 
+Metadata must also include (resource-type-specific required fields):
+
+- `resource_snapshot` — frozen snapshot of the resource's identifying attributes at generation time (name, id, and resource-type-specific fields). Required for audit reproducibility.
+- `quota_unit` — required for `resource_type = "storage_hotel"`. Needed to verify unit conversion at audit time.
+- `provisioner` — required for `resource_type = "virtual_machine"`. Records the provisioner at billing time.
+
 Metadata may also include:
 ```
 price_summary
-provisioner
-quota_unit
 ```
 
 Multi-dimension resources:
@@ -462,7 +478,7 @@ Field types:
 - `invoice` — FK to Invoice, required
 - `resource_type` — CharField(max_length=50), required
 - `resource_id` — PositiveIntegerField, required
-- `description` — CharField(max_length=255), optional (blank=True, null=True)
+- `description` — CharField(max_length=255), optional (blank=True, null=True) — frozen at invoice generation time; set to the resource's `name` field if present and non-blank, otherwise falls back to `{ResourceType} #{resource_id}` (e.g., `StorageHotel #101`). Never recomputed from the live resource after generation.
 - `total_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision, not rounded)
 - `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
@@ -507,7 +523,17 @@ Field types:
 Metadata — required fields (must always be present for audit reproducibility):
 
 - `normalized_usage` — the usage value after unit conversion used in the billing calculation
-- `resolved_prices` — the price(s) per unit applied on that day (from ResourcePrice)
+- `resolved_prices` — the price applied on that day (from ResourcePrice). Shape:
+  ```json
+  {
+    "price_per_unit_year": "500.0000",
+    "discount_price_per_unit_year": "400.0000",
+    "discount_threshold_quantity": "10.0000",
+    "applied_price": "400.0000",
+    "discount_applied": true
+  }
+  ```
+  Where `applied_price` is the price actually used in the daily cost calculation. `discount_price_per_unit_year` and `discount_threshold_quantity` are null if no discount is configured.
 - `autofilled` — boolean, whether the usage was autofilled (true) or from a real snapshot (false)
 
 Metadata — optional fields:
@@ -515,6 +541,23 @@ Metadata — optional fields:
 - `source_snapshot_date` — when autofilled, the date of the original snapshot carried forward
 - `dimension_costs` — per-dimension cost breakdown (strongly recommended for multi-dimension resources)
 - `missing_data_flags` — additional diagnostic information
-- `resource_snapshot` — snapshot of the raw resource data at billing time
+- `resource_snapshot` — snapshot of the raw resource data at billing time (optional at this level; required at InvoiceLine level)
+
+**`missing_data_summary` shape** (present in `Invoice.metadata` when `incomplete=true`):
+
+```json
+{
+  "storage_hotel": {
+    "101": {"missing_days": ["2026-01-05", "2026-01-06"], "count": 2}
+  },
+  "virtual_machine": {
+    "205": {"missing_days": ["2026-01-10"], "count": 1}
+  }
+}
+```
+
+Keys are `resource_type` values; nested keys are string representations of `resource_id`.
+
+---
 
 Note: InvoiceDailyCost does not have a FK to InvoiceLine. The relationship is resolved through tuple matching on `(invoice, resource_type, resource_id)`. This is intentional — it avoids FK management complexity during draft replacement.

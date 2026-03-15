@@ -53,7 +53,9 @@ invoice_total = Σ daily_cost
 
 Invoice snapshots must retain enough resource-identifying data to remain understandable after invoice finalization, even if the live resource later changes, is renamed, or is soft-deleted.
 
-For that reason, InvoiceLine.metadata and InvoiceDailyCost.metadata should include a frozen resource snapshot containing the minimal identifying attributes needed for audit and display.
+For that reason, `InvoiceLine.metadata` must include a frozen resource snapshot (`resource_snapshot`) containing the minimal identifying attributes needed for audit and display. This snapshot is captured at invoice generation time and remains fixed even if the live resource is later renamed, changed, or soft-deleted.
+
+`InvoiceDailyCost.metadata` may optionally include `resource_snapshot`, but it is not required — the InvoiceLine-level snapshot is sufficient for auditability.
 
 ---
 
@@ -101,6 +103,25 @@ The billing engine matches `ResourcePrice` rows using `(resource_type, pricing_d
 
 ---
 
+# Resource Type Registry
+
+Valid `resource_type` values:
+
+| Value | Django Model |
+|---|---|
+| `"storage_hotel"` | `StorageHotel` |
+| `"virtual_machine"` | `VirtualMachine` |
+
+Naming convention: snake_case of the Django model name.
+
+Code location: a choices class or constant module in `apps/billing/` (e.g., `apps/billing/resource_types.py`).
+
+Validation: invoice generation and `ResourcePrice` creation must reject unknown `resource_type` values with **400 Bad Request**.
+
+New resource types must be registered here before they can be billed.
+
+---
+
 # Explicit Resource Selection Format
 
 Explicit resource selection must use `(resource_type, resource_id)` pairs rather than a plain list of IDs.
@@ -129,6 +150,34 @@ Missing days must be reported in the invoice generation response.
 Draft replacement with `force=true`:
 
 When `force=true` and a matching draft invoice exists, the old draft and all its children (InvoiceLines, InvoiceDailyCosts) are deleted in the same transaction and a new invoice is created. The old invoice number (if any) is not reused. The new draft starts with `invoice_number = null`.
+
+**Missing pricing is always fatal:**
+
+Missing pricing data causes invoice generation to fail even when `force=true`. The `force` flag only affects missing usage data and duplicate draft handling. A resource billed at zero due to a pricing configuration gap is more dangerous than a failed invoice.
+
+**Future-dated invoice periods:**
+
+By default, `period_end > today` is rejected with 400 Bad Request. Invoice periods must lie entirely in the past or current day unless `autofill_missing_days=true` is explicitly set.
+
+When `period_end > today` and `autofill_missing_days=true`:
+- Invoice generation is allowed using the standard autofill carry-forward rule
+- Future days have no real snapshots (snapshot ingestion rejects future-dated data), so all future days are filled by carrying forward the last known value
+- The invoice is marked `provisional = true` in metadata
+- If no prior snapshot exists for a required resource, normal missing-data policy applies
+- `force=true` alone does not permit future-dated periods; `autofill_missing_days=true` is required
+
+**Autofill with no prior snapshot:**
+
+When `autofill_missing_days=true` and no prior snapshot exists for a resource:
+- If `force=false`: entire invoice generation fails (fatal)
+- If `force=true`: the resource is billed at zero for all its missing days; reported in `missing_data_summary`; invoice marked `incomplete=true`
+
+**Invoice metadata flags — `incomplete` vs `provisional`:**
+
+These are independent flags in `Invoice.metadata`:
+
+- `incomplete = true` — `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill; the system used fallback behavior (e.g., zero-cost billing). An autofilled invoice where all days were successfully filled via carry-forward is **not** incomplete.
+- `provisional = true` — `period_end > today` at the time of generation; the invoice covers future days filled via autofill. An invoice can be both `incomplete=true` and `provisional=true` simultaneously.
 
 ---
 
@@ -249,6 +298,13 @@ finalized
 - Invoice numbers are assigned during finalization
 - Once assigned, an invoice number is immutable and must never be reused
 - Gaps in the sequence from abandoned drafts are acceptable under this scheme
+
+**Generation algorithm:**
+
+- Format: `INV-YYYY-mm-NNNNN`
+- `YYYY-mm` is derived from the **finalization date** (not `period_start`) — the number reflects when the invoice was issued
+- `NNNNN` is a **global auto-incrementing sequence** (not per-month) — the counter does not reset each month
+- Concurrency: use a dedicated PostgreSQL sequence or `SELECT MAX(invoice_number) FOR UPDATE` within the finalization transaction to prevent duplicate assignment
 
 ---
 
