@@ -51,6 +51,12 @@ Each resource type is responsible for defining its own daily cost formula, subje
 
 ---
 
+# Zero-Billable-Day Exclusion
+
+Resources with zero billable days in the selected period produce no `InvoiceLine` and no `InvoiceDailyCost` rows. They are treated as if they were not selected.
+
+---
+
 # Invoice Total
 
 ```
@@ -85,15 +91,15 @@ Customer totals:
 
 Detailed rounding rule:
 
-- `InvoiceDailyCost` rows remain at full `Decimal` precision
-- `InvoiceLine.total_cost` remains at full `Decimal` precision
+- `InvoiceDailyCost.daily_cost` uses 10 decimal places (`decimal_places=10`)
+- `InvoiceLine.total_cost` uses 10 decimal places (`decimal_places=10`)
 - `Invoice.total_amount` is rounded to 2 decimal places NOK
 - Rounding happens once at the invoice level, not per line
 - Required rounding method: `ROUND_HALF_UP`
 
-The difference between `Invoice.total_amount` (rounded, 2 decimals) and `InvoiceLine.total_cost` (full precision) is intentional:
+The difference between `Invoice.total_amount` (rounded, 2 decimals) and `InvoiceLine.total_cost` (10 decimal places) is intentional:
 - `total_amount` is the customer-visible total
-- `total_cost` on InvoiceLine captures the full-precision per-resource cost
+- `total_cost` on InvoiceLine captures the 10-decimal-place per-resource cost
 
 ---
 
@@ -200,13 +206,40 @@ The `Invoice` model includes two new fields that are part of the invoice identit
 - `selection_scope` — CharField, identifies the selection category (e.g., "all_resources", "resource_types", "explicit_resources")
 - `selection_fingerprint` — CharField, a deterministic hash of the canonical selection payload used to uniquely identify identical selections
 
-## Canonicalization Rules for Fingerprint Computation
+## Fingerprint Specification
 
-Before hashing:
+`selection_fingerprint` is the SHA-256 lowercase hex digest of the UTF-8-encoded canonical JSON payload.
 
-- `resource_types` must be sorted alphabetically
-- `explicit_resources` must be normalized to `(resource_type, resource_id)` tuples and sorted deterministically (by resource_type first, then by resource_id)
-- `selection_scope` is included in the hash input
+**Storage:** `CharField(max_length=64)` (SHA-256 hex digest = 64 characters)
+
+**Canonical payload schema (always use all three keys):**
+
+```json
+{
+  "selection_scope": "<scope>",
+  "selected_resource_types": ["sorted", "alphabetically"],
+  "explicit_resources": [{"resource_type": "...", "resource_id": "..."}]
+}
+```
+
+**Canonicalization rules:**
+
+- Always include all three keys, even if the value is an empty array
+- Stable key ordering: `selection_scope`, `selected_resource_types`, `explicit_resources`
+- Sort `selected_resource_types` alphabetically
+- Normalize `explicit_resources` to objects with `resource_type` and `resource_id`; sort by `resource_type` then `resource_id`
+- Serialize JSON without insignificant whitespace
+- Encode the resulting JSON string as UTF-8 before hashing
+
+**Example for `selection_scope = "all_resources"`:**
+
+```json
+{
+  "selection_scope": "all_resources",
+  "selected_resource_types": [],
+  "explicit_resources": []
+}
+```
 
 ## Duplicate Prevention Behavior
 
@@ -234,6 +267,8 @@ Inside the locked transaction:
 Defines pricing for a BillingAccount.
 
 Each BillingAccount references **exactly one PriceList**.
+
+The billing engine resolves the price list from the account's **current** FK at invoice-generation time. Historical price-list assignment is not tracked in v1. If `BillingAccount.price_list` is changed after historical usage has been captured, future invoice generation for uninvoiced periods will use the current `price_list`. Previously generated draft invoices for affected periods should be regenerated before finalization. Already finalized invoices remain immutable. This should be revisited if historical price-list assignment tracking becomes necessary.
 
 ---
 

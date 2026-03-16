@@ -187,6 +187,10 @@ ACTIVE
 RETIRED
 ```
 
+Validation rules:
+
+- `active_to >= active_from` must be enforced at the service layer **and** as a PostgreSQL DB check constraint. A resource with `active_from > active_to` is invalid.
+
 Per-day billability rule:
 
 A resource is billable for a given day only if:
@@ -226,6 +230,12 @@ Quota units:
 ```
 KB
 KIB
+```
+
+Constraint:
+
+```
+filesystem_identifier UNIQUE
 ```
 
 Soft-delete semantics:
@@ -421,7 +431,7 @@ Field types:
 - `period_end` — DateField, required
 - `currency` — CharField(max_length=3, default="NOK")
 - `selection_scope` — CharField(max_length=50), required — identifies the selection category (e.g., "all_resources", "resource_types", "explicit_resources")
-- `selection_fingerprint` — CharField(max_length=128), required — deterministic hash of the canonical selection payload
+- `selection_fingerprint` — CharField(max_length=64), required — SHA-256 lowercase hex digest of the canonical selection payload
 - `status` — CharField(max_length=20, choices=["draft", "finalized"], default="draft")
 - `total_amount` — DecimalField(max_digits=12, decimal_places=2), nullable — null only before generation runs; set during draft creation and updated on recalculation
 - `metadata` — JSONField(default=dict)
@@ -498,11 +508,11 @@ For multi-dimension resources (e.g. VirtualMachine), one InvoiceLine is created 
 
 Field types:
 
-- `invoice` — FK to Invoice, required
+- `invoice` — FK to Invoice, on_delete=CASCADE, required
 - `resource_type` — CharField(max_length=50), required
 - `resource_id` — PositiveIntegerField, required
 - `description` — CharField(max_length=255), optional (blank=True, null=True) — frozen at invoice generation time; set to the resource's `name` field if present and non-blank, otherwise falls back to `{ResourceType} #{resource_id}` (e.g., `StorageHotel #101`). Never recomputed from the live resource after generation.
-- `total_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision, not rounded)
+- `total_cost` — DecimalField(max_digits=14, decimal_places=10), required (10 decimal places, not rounded)
 - `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
 
@@ -522,7 +532,6 @@ invoice
 resource_type
 resource_id
 date
-pricing_dimension
 daily_cost
 currency
 metadata
@@ -530,43 +539,56 @@ created_at
 ```
 
 Constraint:
-(invoice_id, resource_type, resource_id, date, pricing_dimension) UNIQUE
-
-Note: `pricing_dimension` is included in the unique constraint to support multi-dimension resources that may eventually require one row per dimension. For single-dimension resources (e.g., StorageHotel), this is a singleton tuple.
-
-Fields:
+(invoice_id, resource_type, resource_id, date) UNIQUE
 
 Field types:
 
-- `invoice` — FK to Invoice, required
+- `invoice` — FK to Invoice, on_delete=CASCADE, required
 - `resource_type` — CharField(max_length=50), required
 - `resource_id` — PositiveIntegerField, required
-- `pricing_dimension` — CharField(max_length=50), required. For StorageHotel rows: `quota_tb`. For VirtualMachine rows: `cpu_count`, `ram_gb`, or `disk_gb`.
 - `date` — DateField, required
-- `daily_cost` — DecimalField(max_digits=14, decimal_places=6), required (full precision)
+- `daily_cost` — DecimalField(max_digits=14, decimal_places=10), required (10 decimal places)
 - `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
 
 Metadata — required fields (must always be present for audit reproducibility):
 
-- `normalized_usage` — the usage value after unit conversion used in the billing calculation
-- `resolved_prices` — the price applied on that day (from ResourcePrice). Shape:
-  ```json
-  {
-    "price_per_unit_year": "500.0000",
-    "discount_price_per_unit_year": "400.0000",
-    "discount_threshold_quantity": "10.0000",
-    "applied_price": "400.0000",
-    "discount_applied": true
-  }
-  ```
-  Where `applied_price` is the price actually used in the daily cost calculation. `discount_price_per_unit_year` and `discount_threshold_quantity` are null if no discount is configured.
+- `normalized_usage` — object keyed by pricing dimension. Contains the usage value(s) after unit conversion used in the billing calculation.
+- `resolved_prices` — object keyed by pricing dimension. Each entry contains `price_per_unit_year`, `currency`, `discount_applied`.
+- `dimension_costs` — object keyed by pricing dimension. Each value is the per-dimension daily cost as a Decimal string.
 - `autofilled` — boolean, whether the usage was autofilled (true) or from a real snapshot (false)
+
+StorageHotel metadata example:
+
+```json
+{
+  "normalized_usage": {"quota_tb": "120"},
+  "resolved_prices": {
+    "quota_tb": {"price_per_unit_year": "400", "currency": "NOK", "discount_applied": true}
+  },
+  "dimension_costs": {"quota_tb": "131.51"},
+  "autofilled": false
+}
+```
+
+VirtualMachine metadata example:
+
+```json
+{
+  "normalized_usage": {"cpu_count": "8", "ram_gb": "32", "disk_gb": "500"},
+  "resolved_prices": {
+    "cpu_count": {"price_per_unit_year": "300", "currency": "NOK", "discount_applied": false},
+    "ram_gb": {"price_per_unit_year": "40", "currency": "NOK", "discount_applied": false},
+    "disk_gb": {"price_per_unit_year": "2", "currency": "NOK", "discount_applied": false}
+  },
+  "dimension_costs": {"cpu_count": "6.58", "ram_gb": "3.51", "disk_gb": "2.74"},
+  "autofilled": false
+}
+```
 
 Metadata — optional fields:
 
 - `source_snapshot_date` — when autofilled, the date of the original snapshot carried forward
-- `dimension_costs` — per-dimension cost breakdown (strongly recommended for multi-dimension resources)
 - `missing_data_flags` — additional diagnostic information
 - `resource_snapshot` — snapshot of the raw resource data at billing time (optional at this level; required at InvoiceLine level)
 

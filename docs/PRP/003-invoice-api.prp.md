@@ -54,13 +54,14 @@ Generate a draft invoice.
   "status": "draft",
   "total_amount": "1500.50",
   "currency": "NOK",
+  "selection_scope": "resource_types",
   "created_at": "2026-01-15T10:30:00Z",
+  "finalized_at": null,
+  "incomplete": false,
   "metadata": {
-    "selection_scope": "resource_types",
     "selected_resource_types": ["storage_hotel"],
     "autofill_missing_days": true,
     "force": false,
-    "incomplete": false,
     "provisional": false,
     "missing_data_summary": null
   }
@@ -70,6 +71,8 @@ Generate a draft invoice.
 ### GET /api/v1/invoices/
 
 List invoices.
+
+This endpoint returns a **reduced summary serializer** intentionally. Full metadata is available on the detail endpoint.
 
 **Query parameters:**
 
@@ -81,6 +84,14 @@ List invoices.
 **Response:**
 
 - Status 200: List of invoices
+
+**Fields included in list response:**
+
+`id`, `invoice_number`, `billing_account`, `period_start`, `period_end`, `currency`, `status`, `total_amount`, `selection_scope`, `created_at`, `finalized_at`, `incomplete`
+
+**Fields intentionally excluded from list response:**
+
+`metadata`, `selection_fingerprint`
 
 **Response body:**
 
@@ -99,7 +110,10 @@ List invoices.
       "status": "draft",
       "total_amount": null,
       "currency": "NOK",
-      "created_at": "2026-01-15T10:30:00Z"
+      "selection_scope": "resource_types",
+      "created_at": "2026-01-15T10:30:00Z",
+      "finalized_at": null,
+      "incomplete": false
     }
   ]
 }
@@ -126,14 +140,14 @@ Retrieve a single invoice with lines.
   "status": "draft",
   "total_amount": "1500.50",
   "currency": "NOK",
+  "selection_scope": "resource_types",
   "created_at": "2026-01-15T10:30:00Z",
   "finalized_at": null,
+  "incomplete": false,
   "metadata": {
-    "selection_scope": "resource_types",
     "selected_resource_types": ["storage_hotel"],
     "autofill_missing_days": true,
     "force": false,
-    "incomplete": false,
     "provisional": false
   },
   "lines": [
@@ -160,7 +174,7 @@ Retrieve a single invoice with lines.
 
 Transition a draft invoice to finalized.
 
-Once finalized, the invoice becomes immutable.
+Once finalized, the invoice becomes immutable. Returns the full finalized Invoice object using the same serializer shape as the detail endpoint. `selection_fingerprint` remains excluded from the public API.
 
 **Request body:**
 
@@ -180,10 +194,39 @@ Once finalized, the invoice becomes immutable.
 {
   "id": "<id>",
   "invoice_number": "INV-2026-01-00001",
+  "billing_account": "<id>",
+  "period_start": "2026-01-01",
+  "period_end": "2026-01-31",
   "status": "finalized",
-  "finalized_at": "2026-01-15T11:00:00Z",
   "total_amount": "1500.50",
-  "currency": "NOK"
+  "currency": "NOK",
+  "selection_scope": "resource_types",
+  "created_at": "2026-01-15T10:30:00Z",
+  "finalized_at": "2026-01-15T11:00:00Z",
+  "incomplete": false,
+  "metadata": {
+    "selected_resource_types": ["storage_hotel"],
+    "autofill_missing_days": true,
+    "force": false,
+    "provisional": false
+  },
+  "lines": [
+    {
+      "id": "<id>",
+      "resource_type": "storage_hotel",
+      "resource_id": 101,
+      "description": "StorageHotel #101",
+      "total_cost": "1500.50",
+      "currency": "NOK",
+      "metadata": {
+        "billing_dimensions": ["quota_tb"],
+        "total_quantity_by_dimension": {
+          "quota_tb_days": "31.5"
+        },
+        "filesystem_identifier": "storage-001"
+      }
+    }
+  ]
 }
 ```
 
@@ -214,19 +257,37 @@ This format is consistent with the internal `resource_type + resource_id` patter
 
 ## Validation Failure Cases
 
-Invoice generation must fail (return 400 or 409) if:
+Invoice generation uses three error status codes:
 
-- selected resources do not belong to the provided billing account
+### 400 Bad Request — request validation failures
+
+Returned when the request itself is malformed or contains invalid parameters:
+
+- missing required JSON field
+- invalid date format
+- `period_start` is after `period_end`
+- `period_end > today` and `autofill_missing_days` is not `true`
 - requested resource types are unknown or unsupported
 - the selection is empty or ambiguous
 - the same resource is selected more than once
-- required pricing data is missing (always fatal, even with `force=true`)
-- required usage snapshots are missing and both `force=false` and `autofill_missing_days=false`
-- a matching finalized invoice already exists (immutability rule)
-- a matching draft invoice already exists (unless `force=true`)
-- `billing_account.make_invoice = False` (return 400)
-- `period_start` is after `period_end` (return 400)
-- `period_end > today` and `autofill_missing_days` is not `true` (return 400)
+- selected resources do not belong to the provided billing account
+
+### 409 Conflict — duplicate or state conflicts
+
+Returned when the request conflicts with existing state:
+
+- `duplicate_draft_invoice` — a matching draft invoice already exists (unless `force=true`)
+- `duplicate_finalized_invoice` — a matching finalized invoice already exists (immutability rule)
+- `invoice_already_finalized` — attempt to operate on a finalized invoice (used by finalize endpoint)
+
+### 422 Unprocessable Entity — billing domain failures
+
+Returned when the request is valid but the billing engine cannot complete the operation:
+
+- `no_billable_resources` — selection produced no billable resources for the period
+- `missing_snapshot` — resource has a missing day with no prior state and `force=false`
+- `missing_pricing` — no valid `ResourcePrice` found for a resource on a billed day (always fatal, even with `force=true`)
+- `billing_account_not_billable` — `make_invoice=false` on the billing account
 
 ---
 
@@ -306,3 +367,7 @@ DELETE /api/v1/invoices/{id}                — delete a draft invoice
 ```
 
 For v1, retrieval of lines is included in the main GET /{id}/ response.
+
+### POST /api/v1/invoices/{id}/recalculate (v2 stub)
+
+Draft-only operation. Re-executes billing for an existing draft invoice using the invoice's stored billing context and selection snapshot. Reuses `billing_account`, `period_start`, `period_end`, `selection_scope`, and stored selection data. Deletes and rebuilds all existing `InvoiceLine` and `InvoiceDailyCost` rows. Recomputes invoice totals. Preserves the same Invoice record and draft status. `force` and `autofill_missing_days` flags may be re-specified. Finalized invoices cannot be recalculated. Recalculation does not change invoice identity or selection scope.

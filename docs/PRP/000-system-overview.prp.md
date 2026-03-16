@@ -155,10 +155,11 @@ Billing rule (per day):
 
 ```
 billing_account IS NOT NULL
-AND billing_account.make_invoice = True
 AND active_from <= day
 AND (active_to IS NULL OR day <= active_to)
 ```
+
+Note: `billing_account.make_invoice = True` is a pre-condition checked before resource evaluation, not a per-day condition. See `001-billing-engine.prp.md` for the authoritative billing rule.
 
 `status` represents the resource's current lifecycle state but does not determine historical billability. See `001-billing-engine.prp.md` for the authoritative billing rule.
 

@@ -87,6 +87,8 @@ VirtualMachine daily usage is captured and normalized for billing:
 - `ram_mb` → `ram_gb`: divide by 1024 (binary). Example: `ram_gb = Decimal(ram_mb) / Decimal("1024")`
 - `disks_total_gb` → `disk_gb`: 1:1, no conversion
 
+Note: "GB" in VirtualMachine context means binary gigabytes (GiB = 1024 MB), consistent with hypervisor conventions.
+
 ---
 
 ## Billing Dimensions
@@ -99,7 +101,7 @@ ram_gb
 disk_gb
 ```
 
-Each dimension has its own daily `InvoiceDailyCost` row, allowing independent pricing and discounts per dimension.
+There is **one `InvoiceDailyCost` row per resource per day**. Per-dimension usage, prices, and costs are stored in the row's `metadata` under `normalized_usage`, `resolved_prices`, and `dimension_costs`. Each dimension has independent pricing and discounts resolved via `ResourcePrice`.
 
 ---
 
@@ -116,6 +118,12 @@ VirtualMachine inherits the `billing_objects` manager from ResourceModel. This m
 - `active_to` must be on or before the calendar date of `deleted_at`
 - Default querysets exclude soft-deleted resources; use `billing_objects` manager for billing operations
 - Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
+
+---
+
+## Autofill Rule
+
+When autofill is needed for a missing day on a VirtualMachine, all three billing dimensions (`cpu_count`, `ram_mb`, `disks_total_gb`) are carried forward together from the last known complete `VirtualMachineDailyUsage` row. Individual dimensions are never autofilled independently. This is an atomic carry-forward operation.
 
 ---
 
@@ -159,18 +167,30 @@ Note:
 
 ---
 
-`InvoiceDailyCost.metadata` required fields (same as all resources):
+`InvoiceDailyCost.metadata` required fields:
 
-- `normalized_usage` — normalized daily usage value for this pricing dimension
-- `resolved_prices` — the price(s) per unit applied on that day
+- `normalized_usage` — object keyed by pricing dimension: `{"cpu_count": "<value>", "ram_gb": "<value>", "disk_gb": "<value>"}`
+- `resolved_prices` — object keyed by pricing dimension, each entry contains `price_per_unit_year`, `currency`, `discount_applied`
+- `dimension_costs` — object keyed by pricing dimension, each value is the per-dimension daily cost as a Decimal string
 - `autofilled` — boolean, whether usage was autofilled
 
-Optional fields (VM-specific):
+VirtualMachine `InvoiceDailyCost.metadata` example:
 
-- `cpu_count` — normalized cpu_count value used
-- `ram_gb` — normalized ram_gb value used (converted from ram_mb)
-- `disk_gb` — normalized disk_gb value used
-- `dimension_costs` — per-dimension cost breakdown (strongly recommended for multi-dimension resource validation)
+```json
+{
+  "normalized_usage": {"cpu_count": "8", "ram_gb": "32", "disk_gb": "500"},
+  "resolved_prices": {
+    "cpu_count": {"price_per_unit_year": "300", "currency": "NOK", "discount_applied": false},
+    "ram_gb": {"price_per_unit_year": "40", "currency": "NOK", "discount_applied": false},
+    "disk_gb": {"price_per_unit_year": "2", "currency": "NOK", "discount_applied": false}
+  },
+  "dimension_costs": {"cpu_count": "6.58", "ram_gb": "3.51", "disk_gb": "2.74"},
+  "autofilled": false
+}
+```
+
+Optional fields:
+
 - `source_snapshot_date` — when autofilled, the date of the original snapshot
 - `resource_snapshot` — optional at daily-cost level
 

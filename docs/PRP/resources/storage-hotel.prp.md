@@ -122,6 +122,8 @@ StorageHotel inherits the `billing_objects` manager from ResourceModel. This man
 
 Daily billing uses quota converted to TB, then applies the effective yearly price for that day.
 
+The StorageHotel `pricing_dimension` on `ResourcePrice` is always `"quota_tb"` in v1.
+
 ---
 
 ## Invoice expectations
@@ -140,9 +142,24 @@ Daily billing uses quota converted to TB, then applies the effective yearly pric
 
 Note: `quota_unit` is a required field in InvoiceLine metadata for StorageHotel to enable audit verification of unit conversion.
 
-`InvoiceDailyCost.metadata` required fields: `normalized_usage`, `resolved_prices`, `autofilled`.
+`InvoiceDailyCost.metadata` uses the nested keyed shape. `normalized_usage` uses `{"quota_tb": "<value>"}` -- not a scalar.
 
-Optional fields: `source_snapshot_date`, `dimension_costs`, `missing_data_flags`, `resource_snapshot`.
+Required fields: `normalized_usage`, `resolved_prices`, `dimension_costs`, `autofilled`.
+
+StorageHotel `InvoiceDailyCost.metadata` example:
+
+```json
+{
+  "normalized_usage": {"quota_tb": "120"},
+  "resolved_prices": {
+    "quota_tb": {"price_per_unit_year": "400", "currency": "NOK", "discount_applied": true}
+  },
+  "dimension_costs": {"quota_tb": "131.51"},
+  "autofilled": false
+}
+```
+
+Optional fields: `source_snapshot_date`, `missing_data_flags`, `resource_snapshot`.
 
 ---
 

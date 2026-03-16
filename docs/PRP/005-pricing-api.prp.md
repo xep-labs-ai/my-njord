@@ -120,6 +120,10 @@ Retrieve a single billing account.
 
 Partial update. All fields are patchable except `id`, `created_at`.
 
+**v1 limitation — price list reassignment:**
+
+> If `BillingAccount.price_list` is changed after historical usage has been captured, future invoice generation for uninvoiced periods will use the current `price_list`. Previously generated draft invoices for affected periods should be regenerated before finalization. Already finalized invoices remain immutable. This should be revisited if historical price-list assignment tracking becomes necessary.
+
 **Response:**
 
 - 200: Updated BillingAccount
@@ -305,14 +309,14 @@ Time-bounded rows (those with `effective_to` already set) are immutable — to c
 
 - `effective_to` must be >= `effective_from` (a single-day price range is valid)
 - `effective_to` must not overlap with any existing row for the same `(price_list, resource_type, pricing_dimension)`
-- This endpoint only works on open-ended rows (where `effective_to` is currently null). If the row already has an `effective_to` set, return 409.
+- This endpoint only works on open-ended rows (where `effective_to` is currently null). If the row already has an `effective_to` set, return 409 with error code `price_row_already_closed`.
 
 **Response:**
 
 - 200: Updated ResourcePrice
 - 400: Validation error
 - 404: Not found
-- 409: Row is not open-ended or overlap detected
+- 409: Row is not open-ended (`price_row_already_closed`) or overlap detected
 
 ---
 

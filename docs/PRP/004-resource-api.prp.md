@@ -352,7 +352,7 @@ Ingest a daily usage snapshot.
 
 ### Duplicate Snapshot Behavior
 
-If a snapshot already exists for the same resource and date, ingestion fails with **409 Conflict**. No silent overwrite occurs.
+If a snapshot already exists for the same resource and date, ingestion fails with **409 Conflict** using error code `duplicate_snapshot`. No silent overwrite occurs.
 
 Overwrite and correction mechanisms, if needed later, must be defined explicitly.
 
@@ -381,14 +381,23 @@ Allowed transitions:
 
 - `UNASSIGNED` → `ACTIVE` — requires `billing_account` and `active_from` to be set
 - `ACTIVE` → `RETIRED` — must set `active_to` in the same PATCH
+- `UNASSIGNED` → `RETIRED` — allowed for resources that were created or discovered by mistake but never entered active service. `active_to` is not required for this transition. `active_from` and `active_to` may both remain null. Such resources have zero billable days and never appear in invoices.
 - `RETIRED` → `ACTIVE` — **not allowed** (prevents accidental rebilling)
 
 `billing_account` is optional on resource creation. A resource can be created without a billing account and remain `UNASSIGNED` until assigned.
 
-When patching `status = RETIRED`, the request must include `active_to`. If `active_to` is missing, the request returns 400.
+When patching `status = RETIRED` from `ACTIVE`, the request must include `active_to`. If `active_to` is missing, the request returns 400.
+
+**Validation: `active_to >= active_from`**
+
+If both `active_from` and `active_to` are set, `active_to` must be >= `active_from`. If `active_to < active_from`, the request returns 400.
 
 When a resource transitions to `RETIRED` via PATCH, the service layer sets `deleted_at` to the current timestamp automatically. There is no dedicated DELETE endpoint in v1.
 
 Changing `active_from` or `active_to` on a resource that has been included in a finalized invoice is allowed. Finalized invoices are immutable and unaffected. The change only affects future invoice generation runs.
+
+**v1 limitation — billing account reassignment:**
+
+> If a resource's `billing_account` is changed after historical usage has been captured, invoice generation for past uninvoiced periods will use the current `billing_account`, not historical ownership. Previously generated draft invoices for affected periods should be regenerated before finalization. Already finalized invoices remain immutable. This limitation should be revisited in a future version if reassignment becomes frequent enough to affect billing correctness materially.
 
 ---
