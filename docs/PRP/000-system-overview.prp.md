@@ -223,8 +223,7 @@ config/
 │   ├── base.py
 │   ├── dev.py
 │   ├── test.py
-│   ├── prod.py
-│   └── tests/
+│   └── prod.py
 ├── urls.py
 ├── asgi.py
 └── wsgi.py

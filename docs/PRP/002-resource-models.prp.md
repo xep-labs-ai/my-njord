@@ -190,6 +190,17 @@ ACTIVE
 RETIRED
 ```
 
+**Status transition rules:**
+
+| From | To | Allowed | Reason |
+|---|---|---|---|
+| `UNASSIGNED` | `ACTIVE` | Yes | Requires `billing_account` and `active_from` to be set |
+| `ACTIVE` | `RETIRED` | Yes | Must set `active_to` in the same operation |
+| `RETIRED` | `ACTIVE` | **No** | Prevents accidental rebilling of retired resources |
+| `UNASSIGNED` | `RETIRED` | **No** | `active_from` is required on `ResourceModel` and cannot be null, making a direct `UNASSIGNED -> RETIRED` transition inconsistent with the model definition |
+
+See `004-resource-api.prp.md` for the HTTP-level enforcement of these transitions.
+
 Validation rules:
 
 - `active_to >= active_from` must be enforced at the service layer **and** as a PostgreSQL DB check constraint. A resource with `active_from > active_to` is invalid.
@@ -479,6 +490,13 @@ Standard metadata structure for StorageHotel:
   "billing_dimensions": ["quota_tb"],
   "total_quantity_by_dimension": {
     "quota_tb_days": "3720"
+  },
+  "quota_unit": "KB",
+  "resource_snapshot": {
+    "id": 101,
+    "name": "storage-primary",
+    "filesystem_identifier": "/mnt/storage-primary",
+    "quota_unit": "KB"
   }
 }
 ```
@@ -492,6 +510,12 @@ Standard metadata structure for VirtualMachine:
     "cpu_count_days": "248",
     "ram_gb_days": "992",
     "disk_gb_days": "15500"
+  },
+  "provisioner": "VCENTER",
+  "resource_snapshot": {
+    "id": 205,
+    "name": "vm-prod-001",
+    "provisioner": "VCENTER"
   }
 }
 ```
@@ -504,6 +528,8 @@ Resource-type-specific required fields in metadata:
 
 - `quota_unit` — required for `resource_type = "storage_hotel"`. Needed to verify unit conversion at audit time.
 - `provisioner` — required for `resource_type = "virtual_machine"`. Records the provisioner at billing time.
+
+**Intentional metadata redundancy:** `quota_unit` (StorageHotel) and `provisioner` (VirtualMachine) intentionally appear both as flat top-level keys in `InvoiceLine.metadata` AND inside `resource_snapshot`. The flat top-level key provides quick access without nested lookup; the copy inside `resource_snapshot` ensures the snapshot is self-contained for audit purposes.
 
 Metadata may also include:
 ```
@@ -542,6 +568,7 @@ resource_id
 date
 daily_cost
 currency
+autofilled
 metadata
 created_at
 ```
@@ -557,14 +584,19 @@ Field types:
 - `date` — DateField, required
 - `daily_cost` — DecimalField(max_digits=14, decimal_places=10), required (10 decimal places)
 - `currency` — CharField(max_length=3, default="NOK")
+- `autofilled` — BooleanField(default=False). `true` when the usage was autofilled (carry-forward); `false` when from a real snapshot. This is a dedicated database column to support direct filtering and aggregation queries (e.g., "all autofilled daily costs for this invoice", "count of autofilled days per resource"). `autofilled` is also kept in `metadata` JSON for audit self-containment, but the column is the queryable source of truth.
 - `metadata` — JSONField(default=dict)
+
+Recommended partial index: `CREATE INDEX ... ON InvoiceDailyCost (invoice_id) WHERE autofilled = true` — optimizes queries filtering for autofilled rows.
 
 Metadata — required fields (must always be present for audit reproducibility):
 
 - `normalized_usage` — object keyed by pricing dimension. Contains the usage value(s) after unit conversion used in the billing calculation.
 - `resolved_prices` — object keyed by pricing dimension. Each entry contains `price_per_unit_year`, `currency`, `discount_applied`.
 - `dimension_costs` — object keyed by pricing dimension. Each value is the per-dimension daily cost as a Decimal string.
-- `autofilled` — boolean, whether the usage was autofilled (true) or from a real snapshot (false)
+- `autofilled` — boolean (mirrors the `autofilled` column for audit self-containment; the column is the queryable source of truth)
+
+**Note on example precision:** The `dimension_costs` examples below are simplified for readability. Actual values use full Decimal precision matching `InvoiceDailyCost.daily_cost` (10 decimal places), e.g., `"131.5068493150"` rather than `"131.51"`.
 
 StorageHotel metadata example:
 

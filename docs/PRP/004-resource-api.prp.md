@@ -135,6 +135,13 @@ Partially update a StorageHotel resource.
 - `active_from`
 - `active_to`
 - `status`
+- `quota_unit` — patchable with correction semantics (see warning below)
+
+**Not patchable after creation:**
+
+- `filesystem_identifier` — functions as the StorageHotel external/natural identifier and must remain stable
+
+**`quota_unit` correction warning:** Changing `quota_unit` is allowed in v1 as an administrative correction workflow, but it is a high-impact change because it alters how `quota_raw` values are interpreted for billing. Because historical unit assignment is not tracked, changing `quota_unit` after snapshots already exist may affect invoice generation for uninvoiced historical periods. Operational rule: if `quota_unit` is changed, affected draft invoices should be regenerated before finalization. Already finalized invoices remain immutable. The change should be audit-logged.
 
 **Request example:**
 
@@ -179,7 +186,7 @@ Ingest a daily quota snapshot.
 **Validation rules:**
 
 - `date` must be <= today (no future-dated snapshots)
-- `quota_raw` must be a positive number or zero. Note: `quota_raw = 0` is explicitly valid. It produces `normalized_usage = {"quota_tb": "0"}` and `daily_cost = 0`.
+- `quota_raw` must be a decimal number >= 0 with precision constraints: `max_digits=25, decimal_places=4`. This represents the raw quota value in the unit specified by `quota_unit` (KB or KiB); during billing it is normalized to TB for pricing calculations. Note: `quota_raw = 0` is explicitly valid. It produces `normalized_usage = {"quota_tb": "0"}` and `daily_cost = 0`.
 - If a snapshot already exists for the same storage hotel and date, return 409 Conflict — no silent overwrite
 
 ---
@@ -297,6 +304,10 @@ Partially update a VirtualMachine resource.
 - `active_to`
 - `status`
 
+**Not patchable after creation:**
+
+- `provisioner` — part of the VM identity/context and must remain stable
+
 **Request example:**
 
 ```json
@@ -343,7 +354,7 @@ Ingest a daily usage snapshot.
 **Validation rules:**
 
 - `date` must be <= today (no future-dated snapshots)
-- `cpu_count`, `ram_mb`, `disks_total_gb` must be non-negative numbers
+- `cpu_count`, `ram_mb`, `disks_total_gb` must be non-negative numbers. Note: zero values are explicitly valid for any dimension and produce `daily_cost = 0` for that dimension, consistent with the StorageHotel zero-quota behavior.
 - If a snapshot already exists for the same virtual machine and date, return 409 Conflict — no silent overwrite
 
 ---

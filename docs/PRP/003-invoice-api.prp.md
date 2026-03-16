@@ -58,6 +58,7 @@ Generate a draft invoice.
   "currency": "NOK",
   "selection_scope": "resource_types",
   "created_at": "2026-01-15T10:30:00Z",
+  "updated_at": "2026-01-15T10:30:00Z",
   "finalized_at": null,
   "incomplete": false,
   "metadata": {
@@ -82,6 +83,8 @@ This endpoint returns a **reduced summary serializer** intentionally. Full metad
 - `status` (optional): filter by status (draft, finalized)
 - `period_start` (optional): filter by period start date
 - `period_end` (optional): filter by period end date
+- `incomplete` (optional, boolean): filter by incomplete flag
+- `selection_scope` (optional): filter by selection scope (matches the top-level `selection_scope` column on the Invoice model)
 
 **Response:**
 
@@ -89,7 +92,7 @@ This endpoint returns a **reduced summary serializer** intentionally. Full metad
 
 **Fields included in list response:**
 
-`id`, `invoice_number`, `billing_account`, `period_start`, `period_end`, `currency`, `status`, `total_amount`, `selection_scope`, `created_at`, `finalized_at`, `incomplete`
+`id`, `invoice_number`, `billing_account`, `period_start`, `period_end`, `currency`, `status`, `total_amount`, `selection_scope`, `created_at`, `updated_at`, `finalized_at`, `incomplete`
 
 **Fields intentionally excluded from list response:**
 
@@ -116,6 +119,7 @@ Note: `provisional` is intentionally excluded from the list response in v1. It i
       "currency": "NOK",
       "selection_scope": "resource_types",
       "created_at": "2026-01-15T10:30:00Z",
+      "updated_at": "2026-01-15T10:30:00Z",
       "finalized_at": null,
       "incomplete": false
     }
@@ -146,6 +150,7 @@ Retrieve a single invoice with lines.
   "currency": "NOK",
   "selection_scope": "resource_types",
   "created_at": "2026-01-15T10:30:00Z",
+  "updated_at": "2026-01-15T10:30:00Z",
   "finalized_at": null,
   "incomplete": false,
   "metadata": {
@@ -211,6 +216,7 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
   "currency": "NOK",
   "selection_scope": "resource_types",
   "created_at": "2026-01-15T10:30:00Z",
+  "updated_at": "2026-01-15T11:00:00Z",
   "finalized_at": "2026-01-15T11:00:00Z",
   "incomplete": false,
   "metadata": {
@@ -307,11 +313,11 @@ Returned when the request is valid but the billing engine cannot complete the op
 
 All error responses use the structured format defined in `.claude/docs/API.md`.
 
-**409 Conflict example (`duplicate_invoice`):**
+**409 Conflict example (`duplicate_draft_invoice`):**
 
 ```json
 {
-  "code": "duplicate_invoice",
+  "code": "duplicate_draft_invoice",
   "message": "A draft invoice already exists for the same billing account, billing period, and billing selection.",
   "details": {
     "billing_account": 123,
@@ -359,10 +365,10 @@ All error responses use the structured format defined in `.claude/docs/API.md`.
 
 When an invoice generation request is made:
 
-1. Check for a matching finalized invoice with the same `(billing_account, period_start, period_end, selection_scope, selected_resource_types, explicit_resources)`.
+1. Check for a matching finalized invoice using `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)`. `selection_fingerprint` is a deterministic hash derived from `selected_resource_types` and `explicit_resources` (see `001-billing-engine.prp.md` for the fingerprint specification).
    - If found, return 409 Conflict. Finalized invoices are immutable.
 
-2. Check for a matching draft invoice with the same selection parameters.
+2. Check for a matching draft invoice using the same `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)` tuple.
    - If found and `force=false`: return 409 Conflict.
    - If found and `force=true`: replace the draft invoice atomically.
 
@@ -372,7 +378,7 @@ When an invoice generation request is made:
 
 When `force=true` is passed:
 
-- If a matching draft invoice exists, it is deleted with all its children (InvoiceLines, InvoiceDailyCosts) in the same transaction, and a new draft is created. The old invoice number (if any) is not reused.
+- If a matching draft invoice exists, it is deleted with all its children (InvoiceLines, InvoiceDailyCosts) in the same transaction, and a new draft is created. The replacement draft has `invoice_number = null` (consistent with all draft invoices).
 - If a matching finalized invoice exists, invoice generation fails (immutability)
 - Missing data that would normally fail is allowed, according to the billing engine rules
 - The invoice metadata will reflect that `force` was used

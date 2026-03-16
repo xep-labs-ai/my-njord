@@ -116,8 +116,8 @@ Define the allowed `pricing_dimension` values:
 
 **VirtualMachine:**
 - `cpu_count`
-- `ram_gb`
-- `disk_gb`
+- `ram_gb` — computed as `ram_mb / 1024` (binary GiB; see `virtual-machine.prp.md` for conversion rules)
+- `disk_gb` — passed through 1:1 from `disks_total_gb` with no conversion (unit is as reported by the hypervisor; see `virtual-machine.prp.md`)
 
 The billing engine matches `ResourcePrice` rows using `(resource_type, pricing_dimension)`.
 
@@ -169,7 +169,7 @@ Missing days must be reported in the invoice generation response.
 
 Draft replacement with `force=true`:
 
-When `force=true` and a matching draft invoice exists, the old draft and all its children (InvoiceLines, InvoiceDailyCosts) are deleted in the same transaction and a new invoice is created. The old invoice number (if any) is not reused. The new draft starts with `invoice_number = null`.
+When `force=true` and a matching draft invoice exists, the old draft and all its children (InvoiceLines, InvoiceDailyCosts) are deleted in the same transaction and a new invoice is created. The replacement draft has `invoice_number = null` (consistent with all draft invoices).
 
 **Missing pricing is always fatal:**
 
@@ -253,7 +253,9 @@ A matching draft is replaced atomically when `force=true`.
 
 ## Concurrency Control
 
-To prevent race conditions when two invoice generation requests arrive simultaneously for the same `(billing_account, period_start, period_end)`, the system uses a PostgreSQL advisory lock keyed on these three values within the invoice generation transaction.
+To prevent race conditions when two invoice generation requests arrive simultaneously for overlapping invoice identities, the system uses a PostgreSQL advisory lock keyed on `(billing_account, period_start, period_end, selection_scope)` within the invoice generation transaction.
+
+This lock scope is intentionally broader than the full uniqueness constraint `(billing_account, period_start, period_end, selection_scope, selection_fingerprint)` but narrower than locking on account+period only. Including `selection_scope` reduces unnecessary serialization when the same billing account commonly generates separate invoices for different resource categories (e.g., StorageHotel vs VirtualMachine). Requests with the same `selection_scope` but different underlying selections may still serialize. This is a v1 balance between correctness, simplicity, and practical concurrency. `selection_fingerprint` is kept out of the lock key unless a stronger concurrency need appears later.
 
 Inside the locked transaction:
 
@@ -418,6 +420,16 @@ finalized_at = now()
 ```
 
 Finalized invoices become **immutable**.
+
+---
+
+## `total_quantity_by_dimension` Computation
+
+`InvoiceLine.metadata.total_quantity_by_dimension` aggregates the daily billing snapshots for a resource within an invoice.
+
+**Formal definition:** `{dimension}_days` is the sum of `InvoiceDailyCost.metadata.normalized_usage[dimension]` across all billed days for the same `(invoice, resource_type, resource_id)` tuple. Autofilled billed days are included in this sum. Non-billable days are excluded because no `InvoiceDailyCost` row exists for them.
+
+This makes the line-level quantity summary deterministic, explainable, and reproducible from persisted `InvoiceDailyCost` rows.
 
 ---
 

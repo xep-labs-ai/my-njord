@@ -118,7 +118,7 @@ Retrieve a single billing account.
 
 ### PATCH /api/v1/billing-accounts/{id}/
 
-Partial update. All fields are patchable except `id`, `created_at`.
+Partial update. All fields are patchable except `id`, `created_at`, `updated_at`.
 
 **v1 limitation — price list reassignment:**
 
@@ -262,7 +262,7 @@ Create a new ResourcePrice row.
 - `price_per_unit_year` must be positive
 - `discount_price_per_unit_year` must be positive if set
 - **Cross-field validation:** `discount_price_per_unit_year` and `discount_threshold_quantity` must both be set or both be null. Storing only one of the two is a validation error (400).
-- Returns 400 on validation failure, 409 on date range overlap
+- Returns 400 on validation failure, 409 with error code `price_range_overlap` on date range overlap
 
 ---
 
