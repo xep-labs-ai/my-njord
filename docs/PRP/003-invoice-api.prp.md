@@ -8,6 +8,8 @@ It specifies endpoint paths, request/response shapes, selection inputs, validati
 
 This document complements `001-billing-engine.prp.md`, which defines the billing calculation rules. The billing engine PRP is the source of truth for billing logic. This API PRP is the source of truth for the HTTP interface.
 
+**Global rule:** `selection_fingerprint` is excluded from all public API responses in v1. It is an internal implementation detail used for duplicate prevention.
+
 ---
 
 ## Endpoints (v1)
@@ -91,7 +93,9 @@ This endpoint returns a **reduced summary serializer** intentionally. Full metad
 
 **Fields intentionally excluded from list response:**
 
-`metadata`, `selection_fingerprint`
+`metadata`, `selection_fingerprint`, `provisional`
+
+Note: `provisional` is intentionally excluded from the list response in v1. It is a detail-level concern and is available in the detail and generate responses only (inside `metadata`).
 
 **Response body:**
 
@@ -163,7 +167,12 @@ Retrieve a single invoice with lines.
         "total_quantity_by_dimension": {
           "quota_tb_days": "31.5"
         },
-        "filesystem_identifier": "storage-001"
+        "resource_snapshot": {
+          "id": 101,
+          "name": "StorageHotel #101",
+          "filesystem_identifier": "storage-001",
+          "quota_unit": "KIB"
+        }
       }
     }
   ]
@@ -174,7 +183,7 @@ Retrieve a single invoice with lines.
 
 Transition a draft invoice to finalized.
 
-Once finalized, the invoice becomes immutable. Returns the full finalized Invoice object using the same serializer shape as the detail endpoint. `selection_fingerprint` remains excluded from the public API.
+Once finalized, the invoice becomes immutable. Returns the full finalized Invoice object using the same serializer shape as the detail endpoint.
 
 **Request body:**
 
@@ -223,7 +232,12 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
         "total_quantity_by_dimension": {
           "quota_tb_days": "31.5"
         },
-        "filesystem_identifier": "storage-001"
+        "resource_snapshot": {
+          "id": 101,
+          "name": "StorageHotel #101",
+          "filesystem_identifier": "storage-001",
+          "quota_unit": "KIB"
+        }
       }
     }
   ]
@@ -265,7 +279,7 @@ Returned when the request itself is malformed or contains invalid parameters:
 
 - missing required JSON field
 - invalid date format
-- `period_start` is after `period_end`
+- `period_start` is after `period_end` (note: `period_start == period_end` is valid and produces exactly one daily evaluation)
 - `period_end > today` and `autofill_missing_days` is not `true`
 - requested resource types are unknown or unsupported
 - the selection is empty or ambiguous
@@ -288,6 +302,39 @@ Returned when the request is valid but the billing engine cannot complete the op
 - `missing_snapshot` — resource has a missing day with no prior state and `force=false`
 - `missing_pricing` — no valid `ResourcePrice` found for a resource on a billed day (always fatal, even with `force=true`)
 - `billing_account_not_billable` — `make_invoice=false` on the billing account
+
+### Error Response Body Examples
+
+All error responses use the structured format defined in `.claude/docs/API.md`.
+
+**409 Conflict example (`duplicate_invoice`):**
+
+```json
+{
+  "code": "duplicate_invoice",
+  "message": "A draft invoice already exists for the same billing account, billing period, and billing selection.",
+  "details": {
+    "billing_account": 123,
+    "period_start": "2026-01-01",
+    "period_end": "2026-01-31",
+    "selection_scope": "all_resources"
+  }
+}
+```
+
+**422 Unprocessable Entity example (`missing_snapshot`):**
+
+```json
+{
+  "code": "missing_snapshot",
+  "message": "Invoice generation failed because one or more required billing snapshots were missing.",
+  "details": {
+    "resource_type": "storage_hotel",
+    "resource_id": 101,
+    "missing_dates": ["2026-01-16", "2026-01-17", "2026-01-18"]
+  }
+}
+```
 
 ---
 

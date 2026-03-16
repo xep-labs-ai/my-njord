@@ -222,12 +222,15 @@ config/
 ├── settings/
 │   ├── base.py
 │   ├── dev.py
+│   ├── test.py
 │   ├── prod.py
 │   └── tests/
 ├── urls.py
 ├── asgi.py
 └── wsgi.py
 ```
+
+`config/settings/test.py` is used for automated tests (`DJANGO_SETTINGS_MODULE = "config.settings.test"` in `pyproject.toml`). `config/settings/dev.py` is for local development only.
 
 ---
 

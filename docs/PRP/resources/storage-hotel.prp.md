@@ -126,6 +126,23 @@ The StorageHotel `pricing_dimension` on `ResourcePrice` is always `"quota_tb"` i
 
 ---
 
+## Canonical `resource_snapshot` Schema
+
+The `resource_snapshot` in `InvoiceLine.metadata` for StorageHotel must contain:
+
+```json
+{
+  "id": "<int>",
+  "name": "<str>",
+  "filesystem_identifier": "<str>",
+  "quota_unit": "<str>"
+}
+```
+
+This snapshot is frozen at invoice generation time and must be present for all StorageHotel InvoiceLines.
+
+---
+
 ## Invoice expectations
 
 `InvoiceLine.metadata` standard structure:

@@ -179,7 +179,7 @@ Ingest a daily quota snapshot.
 **Validation rules:**
 
 - `date` must be <= today (no future-dated snapshots)
-- `quota_raw` must be a positive number or zero
+- `quota_raw` must be a positive number or zero. Note: `quota_raw = 0` is explicitly valid. It produces `normalized_usage = {"quota_tb": "0"}` and `daily_cost = 0`.
 - If a snapshot already exists for the same storage hotel and date, return 409 Conflict — no silent overwrite
 
 ---
@@ -381,7 +381,7 @@ Allowed transitions:
 
 - `UNASSIGNED` → `ACTIVE` — requires `billing_account` and `active_from` to be set
 - `ACTIVE` → `RETIRED` — must set `active_to` in the same PATCH
-- `UNASSIGNED` → `RETIRED` — allowed for resources that were created or discovered by mistake but never entered active service. `active_to` is not required for this transition. `active_from` and `active_to` may both remain null. Such resources have zero billable days and never appear in invoices.
+- `UNASSIGNED` → `RETIRED` — **not allowed**. Resources that were created by mistake must be corrected through other means (e.g., soft-delete or administrative cleanup). This transition is prohibited because `active_from` is required on `ResourceModel` and cannot be null, making a direct `UNASSIGNED → RETIRED` transition inconsistent with the model definition.
 - `RETIRED` → `ACTIVE` — **not allowed** (prevents accidental rebilling)
 
 `billing_account` is optional on resource creation. A resource can be created without a billing account and remain `UNASSIGNED` until assigned.
@@ -399,5 +399,9 @@ Changing `active_from` or `active_to` on a resource that has been included in a 
 **v1 limitation — billing account reassignment:**
 
 > If a resource's `billing_account` is changed after historical usage has been captured, invoice generation for past uninvoiced periods will use the current `billing_account`, not historical ownership. Previously generated draft invoices for affected periods should be regenerated before finalization. Already finalized invoices remain immutable. This limitation should be revisited in a future version if reassignment becomes frequent enough to affect billing correctness materially.
+
+**v1 limitation — single-record ingestion:**
+
+> v1 ingestion endpoints accept one snapshot per request. At ~10,000 resources, this means ~10,000 API calls per day. Bulk ingestion is a likely future enhancement.
 
 ---

@@ -261,6 +261,7 @@ Create a new ResourcePrice row.
 - `effective_to` must be >= `effective_from` if set (a single-day price range is valid)
 - `price_per_unit_year` must be positive
 - `discount_price_per_unit_year` must be positive if set
+- **Cross-field validation:** `discount_price_per_unit_year` and `discount_threshold_quantity` must both be set or both be null. Storing only one of the two is a validation error (400).
 - Returns 400 on validation failure, 409 on date range overlap
 
 ---

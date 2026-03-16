@@ -16,16 +16,18 @@ Explain what daily data is used for invoicing.
 
 ### <ResourceName> (inherits ResourceModel)
 
-Fields:
+Fields (inherited from ResourceModel):
 
 ```text
 id
 billing_account
 name
 status
+active_from
+active_to
+deleted_at
 created_at
 updated_at
-deleted_at
 ```
 
 Resource-specific fields:

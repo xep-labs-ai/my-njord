@@ -27,7 +27,7 @@ Rules:
 - `contact_email` (EmailField, optional, blank=True, null=True)
 - `contact_telephone_number` (CharField, optional, blank=True, null=True)
 - `customer_number` (CharField, optional, unique when set, blank=True, null=True)
-- `make_invoice` (BooleanField, default=True) — controls whether invoice generation runs for this account. Resources belonging to an account where `make_invoice = False` are excluded from all invoice generation runs. The `POST /api/v1/invoices/generate` endpoint returns 400 if the billing account has `make_invoice = False`.
+- `make_invoice` (BooleanField, default=True) — controls whether invoice generation runs for this account. Resources belonging to an account where `make_invoice = False` are excluded from all invoice generation runs. The `POST /api/v1/invoices/generate` endpoint returns 422 (`billing_account_not_billable`) if the billing account has `make_invoice = False`.
 - `internal_customer` (BooleanField, default=True)
 
 Purpose:
@@ -110,7 +110,7 @@ Rules:
 
 - `id` (integer PK)
 - `name` (CharField, required, unique)
-- `price_list` (FK to PriceList, required) — each BillingAccount must use exactly one PriceList
+- `price_list` (FK to PriceList, required, on_delete=PROTECT) — each BillingAccount must use exactly one PriceList
 - All UiO-specific fields: optional (blank=True, null=True)
 - `created_at` / `updated_at`
 
@@ -169,7 +169,10 @@ name
 status
 active_from
 active_to
+deleted_at
 ```
+
+- `deleted_at` — DateTimeField, nullable (null = not soft-deleted). Used for soft-delete semantics across all resource types.
 
 Field types:
 
@@ -211,7 +214,7 @@ Changing `active_from` or `active_to` on a resource that has been included in a 
 
 Represents a **filesystem resource**.
 
-Fields:
+Fields (in addition to inherited ResourceModel fields including `deleted_at`):
 
 ```
 billing_account
@@ -222,7 +225,6 @@ active_from
 active_to
 created_at
 updated_at
-deleted_at
 ```
 
 Quota units:
@@ -263,6 +265,7 @@ created_at
 
 Field types:
 
+- `storage_hotel` — FK to StorageHotel, required, on_delete=CASCADE
 - `quota_raw` — DecimalField(max_digits=25, decimal_places=4)
 
 Constraint:
@@ -294,7 +297,7 @@ created_at
 
 Represents a compute resource.
 
-Fields:
+Fields (in addition to inherited ResourceModel fields including `deleted_at`):
 
 ```
 billing_account
@@ -305,7 +308,6 @@ active_from
 active_to
 created_at
 updated_at
-deleted_at
 ```
 
 Provisioners:
@@ -313,6 +315,8 @@ Provisioners:
 ```
 VCENTER
 ```
+
+**v1 uniqueness note:** There is no natural-key uniqueness constraint in v1 beyond the primary key. Callers and ingestion workflows are responsible for avoiding duplicate VM creation. Duplicate VirtualMachine rows, if created, are treated as separate billable resources.
 
 Soft-delete semantics:
 
@@ -341,6 +345,7 @@ created_at
 
 Field types:
 
+- `virtual_machine` — FK to VirtualMachine, required, on_delete=CASCADE
 - `cpu_count` — PositiveIntegerField
 - `ram_mb` — DecimalField(max_digits=14, decimal_places=2)
 - `disks_total_gb` — DecimalField(max_digits=14, decimal_places=2)
@@ -385,6 +390,7 @@ period_end
 currency
 status
 total_amount
+incomplete
 selection_scope
 selection_fingerprint
 created_at
@@ -393,6 +399,8 @@ finalized_at
 metadata
 ```
 
+- `incomplete` — BooleanField(default=False). `true` when `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill, and the system used fallback behavior (e.g., zero-cost billing). `false` when all resource-days were resolved from real snapshots or successful carry-forward autofill. This is a dedicated database column, not a metadata-only flag, to support direct filtering in list queries.
+
 Metadata may include:
 ```
 selection_scope
@@ -400,14 +408,12 @@ selected_resource_types
 explicit_resources
 force
 autofill_missing_days
-incomplete
 provisional
 missing_data_summary
 ```
 
 Metadata flag semantics:
 
-- `incomplete` (boolean) — `true` when `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill, and the system used fallback behavior (e.g., zero-cost billing). `false` when all resource-days were resolved from real snapshots or successful carry-forward autofill.
 - `provisional` (boolean) — `true` when `period_end > today` at generation time; the invoice covers future days filled via autofill. Defaults to `false`.
 - `missing_data_summary` — present when `incomplete=true`; reports which resources had missing days.
 
@@ -426,7 +432,7 @@ Invoice number assignment:
 Field types:
 
 - `invoice_number` — CharField(max_length=20), nullable, unique when set (fits `INV-YYYY-mm-NNNNN`)
-- `billing_account` — FK to BillingAccount, required
+- `billing_account` — FK to BillingAccount, required, on_delete=PROTECT
 - `period_start` — DateField, required
 - `period_end` — DateField, required
 - `currency` — CharField(max_length=3, default="NOK")
@@ -463,6 +469,8 @@ metadata
 ```
 
 Metadata must include `billing_dimensions` and `total_quantity_by_dimension`.
+
+**Naming convention for `total_quantity_by_dimension` keys:** Keys use the format `{pricing_dimension}_days`, representing the cumulative quantity-days for that dimension across all billed days in the invoice period. Examples: `quota_tb_days`, `cpu_count_days`, `ram_gb_days`, `disk_gb_days`.
 
 Standard metadata structure for StorageHotel:
 

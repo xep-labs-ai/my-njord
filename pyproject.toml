@@ -33,7 +33,7 @@ where = ["."]
 include = ["apps*", "config*"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings.dev"
+DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -73,5 +73,5 @@ module = [
 ignore_errors = true
 
 [tool.django-stubs]
-django_settings_module = "config.settings.dev"
+django_settings_module = "config.settings.test"
 

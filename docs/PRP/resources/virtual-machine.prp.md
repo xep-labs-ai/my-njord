@@ -31,6 +31,8 @@ deleted_at
 VCENTER
 ```
 
+**v1 uniqueness note:** There is no natural-key uniqueness constraint in v1 beyond the primary key. Callers and ingestion workflows are responsible for avoiding duplicate VM creation. Duplicate VirtualMachine rows, if created, are treated as separate billable resources.
+
 ---
 
 ## Daily snapshot model
@@ -83,7 +85,7 @@ created_at
 
 VirtualMachine daily usage is captured and normalized for billing:
 
-- `cpu_count` → `cpu_count`: 1:1, no conversion
+- `cpu_count` → `cpu_count`: 1:1, no conversion. Note: `cpu_count` is stored as `PositiveIntegerField` but is coerced to `Decimal` during billing normalization via `Decimal(str(cpu_count))`. Metadata shows it as a Decimal string (e.g., `"cpu_count": "8"`).
 - `ram_mb` → `ram_gb`: divide by 1024 (binary). Example: `ram_gb = Decimal(ram_mb) / Decimal("1024")`
 - `disks_total_gb` → `disk_gb`: 1:1, no conversion
 
@@ -130,6 +132,22 @@ When autofill is needed for a missing day on a VirtualMachine, all three billing
 ## Billing notes
 
 The daily usage row is a captured billing snapshot, not necessarily real runtime utilization.
+
+---
+
+## Canonical `resource_snapshot` Schema
+
+The `resource_snapshot` in `InvoiceLine.metadata` for VirtualMachine must contain:
+
+```json
+{
+  "id": "<int>",
+  "name": "<str>",
+  "provisioner": "<str>"
+}
+```
+
+This snapshot is frozen at invoice generation time and must be present for all VirtualMachine InvoiceLines.
 
 ---
 

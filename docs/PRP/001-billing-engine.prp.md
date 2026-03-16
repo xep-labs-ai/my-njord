@@ -29,6 +29,8 @@ For each resource and each day:
 
 Daily cost calculation is **resource-type specific**. There is no universal formula applied to all resources.
 
+**Type coercion rule:** Fields stored as integer types (e.g., `VirtualMachine.cpu_count` as `PositiveIntegerField`) must be coerced to `Decimal` during normalization via `Decimal(str(value))`. This ensures all billing calculations use `Decimal` consistently.
+
 For resource types with yearly-prorated pricing, an illustrative formula is:
 
 ```
@@ -70,6 +72,8 @@ invoice_total = Σ daily_cost
 Invoice snapshots must retain enough resource-identifying data to remain understandable after invoice finalization, even if the live resource later changes, is renamed, or is soft-deleted.
 
 `resource_snapshot` is **required** in `InvoiceLine.metadata`. It must contain the minimal identifying attributes needed for audit and display. This snapshot is captured at invoice generation time and remains fixed even if the live resource is later renamed, changed, or soft-deleted.
+
+Each resource PRP defines the exact required `resource_snapshot` schema for that resource type. See `docs/PRP/resources/storage-hotel.prp.md` and `docs/PRP/resources/virtual-machine.prp.md` for the canonical schemas.
 
 `InvoiceDailyCost.metadata` may optionally include `resource_snapshot`; it is not required at the daily-cost level — the InvoiceLine-level snapshot is sufficient for auditability.
 
@@ -185,17 +189,15 @@ When `period_end > today` and `autofill_missing_days=true`:
 **Autofill with no prior snapshot:**
 
 When `autofill_missing_days=true` and no prior snapshot exists for a resource:
-- If `force=false`: entire invoice generation fails (fatal)
+- If `force=false`: the **entire invoice generation fails** (fatal -- not a per-resource skip). The entire invoice transaction is rolled back: no invoice is created, no InvoiceLines persist, no InvoiceDailyCost rows persist. Example: if resource A has complete data and resource B has no prior snapshot, and `force=false`, the entire invoice fails -- resource A's valid data does not produce a partial invoice.
 - If `force=true`: the resource is billed at zero for all its missing days; reported in `missing_data_summary`; invoice marked `incomplete=true`
 
 Billing at zero is recorded clearly in the invoice metadata so that human review can identify the fallback behavior.
 
-**Invoice metadata flags — `incomplete` vs `provisional`:**
+**Invoice flags — `incomplete` vs `provisional`:**
 
-These are independent flags in `Invoice.metadata`:
-
-- `incomplete = true` — `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill; the system used fallback behavior (e.g., zero-cost billing). An autofilled invoice where all days were successfully filled via carry-forward is **not** incomplete.
-- `provisional = true` — `period_end > today` at the time of generation; the invoice covers future days filled via autofill. An invoice can be both `incomplete=true` and `provisional=true` simultaneously.
+- `incomplete` is a dedicated `BooleanField` on the `Invoice` model (default `false`). It is `true` when `force=true` was used and at least one resource/day could not be resolved from a real snapshot or successful autofill; the system used fallback behavior (e.g., zero-cost billing). An autofilled invoice where all days were successfully filled via carry-forward is **not** incomplete. `Invoice.metadata` may still contain `missing_data_summary` and supporting details when `incomplete=true`.
+- `provisional` is stored in `Invoice.metadata` (default `false`). It is `true` when `period_end > today` at the time of generation; the invoice covers future days filled via autofill. An invoice can be both `incomplete=true` and `provisional=true` simultaneously.
 
 ---
 
@@ -282,7 +284,7 @@ Fields:
 - `resource_type` — CharField(max_length=50), required
 - `pricing_dimension` — CharField(max_length=50), required
 - `price_per_unit_year` — DecimalField(max_digits=14, decimal_places=4), required
-- `price_currency` — CharField(max_length=3, default="NOK")
+- `price_currency` — CharField(max_length=3, default="NOK"). **v1 constraint:** All pricing in v1 uses NOK. The billing engine must validate that all resolved `ResourcePrice` rows for an invoice use the same currency as `Invoice.currency`. A currency mismatch is a fatal billing error.
 - `discount_price_per_unit_year` — DecimalField(max_digits=14, decimal_places=4), nullable (null = no discount price)
 - `discount_threshold_quantity` — DecimalField(max_digits=14, decimal_places=4), nullable (null = discount does not apply)
 - `effective_from` — DateField, required
@@ -319,7 +321,9 @@ usage < threshold → normal price
 
 ```
 
-If discount_threshold is null, discount does not apply
+If discount_threshold is null, discount does not apply.
+
+**Cross-field invariant:** `discount_price_per_unit_year` and `discount_threshold_quantity` must both be set or both be null. This is enforced at ingestion time (ResourcePrice creation). The billing engine assumes this invariant holds for all resolved price rows.
 
 For multi-dimension resources, the discount threshold on each `ResourcePrice` row is evaluated against the normalized daily usage value of that specific pricing dimension. Each dimension is evaluated independently.
 
@@ -414,3 +418,17 @@ finalized_at = now()
 ```
 
 Finalized invoices become **immutable**.
+
+---
+
+## InvoiceLine / InvoiceDailyCost Tuple Integrity Invariant
+
+Invoice generation must guarantee tuple-level consistency for `(invoice, resource_type, resource_id)`.
+
+For every such tuple in a committed invoice:
+
+- if one or more `InvoiceDailyCost` rows exist, exactly one corresponding `InvoiceLine` must exist
+- if an `InvoiceLine` exists, it must aggregate all `InvoiceDailyCost` rows for that same tuple
+- invoice generation must run inside a transaction so partial writes cannot leave orphaned `InvoiceDailyCost` rows or unmatched `InvoiceLine` rows
+
+This invariant is enforced by the transaction boundary, not by a direct FK between `InvoiceDailyCost` and `InvoiceLine`.
