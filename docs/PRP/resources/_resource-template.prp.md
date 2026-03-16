@@ -43,6 +43,8 @@ Resource-specific fields:
 
 ### <ResourceName>DailyUsage
 
+Note: `<ResourceName>DailyUsage` is a suggested naming convention. Resource-specific suffixes (e.g., `DailyQuota`, `DailyCapacity`) are acceptable when the domain term is clearer than the generic `DailyUsage`.
+
 Fields:
 
 ```text
@@ -84,6 +86,55 @@ created_at
 ## Billing unit
 
 Define the normalized billing unit for this resource.
+
+---
+
+## Unit Conversion Rules
+
+Define any raw-to-billing-unit conversions for this resource.
+
+Pattern: specify the conversion formula from each raw ingestion field to the corresponding billing dimension. Example: `raw_field → billing_dimension: conversion formula`.
+
+---
+
+## Manager Availability
+
+`<ResourceName>` inherits the `billing_objects` manager from ResourceModel. This manager includes soft-deleted resources, which is necessary for the billing engine to bill historical periods.
+
+---
+
+## Soft-Delete Invariants
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources; use `billing_objects` manager for billing operations
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
+
+---
+
+## Autofill Rule
+
+Define the autofill carry-forward behavior for this resource.
+
+Pattern: when autofill is needed for a missing day, all billing-relevant fields are carried forward together from the last known complete snapshot row. Individual fields are never autofilled independently.
+
+---
+
+## Canonical `resource_snapshot` Schema
+
+The `resource_snapshot` in `InvoiceLine.metadata` for `<ResourceName>` must contain:
+
+```json
+{
+  "id": "<int>",
+  "name": "<str>",
+  "<resource_specific_field_1>": "<type>",
+  "<resource_specific_field_2>": "<type>"
+}
+```
+
+This snapshot is frozen at invoice generation time and must be present for all `<ResourceName>` InvoiceLines.
 
 ---
 

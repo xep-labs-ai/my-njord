@@ -290,7 +290,7 @@ Retrieve a single ResourcePrice row.
 
 ---
 
-### PATCH /api/v1/price-lists/{price_list_id}/resource-prices/{id}/set-effective-to/
+### POST /api/v1/price-lists/{price_list_id}/resource-prices/{id}/set-effective-to/
 
 Sets `effective_to` on an **open-ended** ResourcePrice row (one with `effective_to = null`). This is the only mutation allowed on a ResourcePrice row after creation.
 

@@ -153,9 +153,17 @@ This snapshot is frozen at invoice generation time and must be present for all S
   "total_quantity_by_dimension": {
     "quota_tb_days": "3720"
   },
-  "quota_unit": "KB"
+  "quota_unit": "KB",
+  "resource_snapshot": {
+    "id": 101,
+    "name": "storage-primary",
+    "filesystem_identifier": "/mnt/storage-primary",
+    "quota_unit": "KB"
+  }
 }
 ```
+
+Note: `resource_snapshot` uses the canonical schema defined in the "Canonical `resource_snapshot` Schema" section above and is required for all StorageHotel InvoiceLines.
 
 Note: `quota_unit` is a required field in InvoiceLine metadata for StorageHotel to enable audit verification of unit conversion.
 

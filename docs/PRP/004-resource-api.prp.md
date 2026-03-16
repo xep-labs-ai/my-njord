@@ -32,7 +32,7 @@ Create a new StorageHotel resource.
 - `filesystem_identifier` (CharField, required)
 - `quota_unit` (CharField, required) — values: `"KB"`, `"KIB"`
 - `billing_account` (integer PK, optional, nullable)
-- `active_from` (date, required)
+- `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, optional)
 
 **Read-only fields:**
@@ -189,6 +189,12 @@ Ingest a daily quota snapshot.
 - `quota_raw` must be a decimal number >= 0 with precision constraints: `max_digits=25, decimal_places=4`. This represents the raw quota value in the unit specified by `quota_unit` (KB or KiB); during billing it is normalized to TB for pricing calculations. Note: `quota_raw = 0` is explicitly valid. It produces `normalized_usage = {"quota_tb": "0"}` and `daily_cost = 0`.
 - If a snapshot already exists for the same storage hotel and date, return 409 Conflict — no silent overwrite
 
+**Resource status and ingestion rules:**
+
+- RETIRED resources: ingestion of historical snapshots is allowed. The date validation already ensures the snapshot is historical. Late-arriving snapshots for retired resources are a legitimate operational scenario.
+- Soft-deleted resources: ingestion is rejected. The default manager returns 404 — soft-deleted resources are not valid ingestion targets in v1.
+- Future-dated snapshots remain invalid regardless of resource status.
+
 ---
 
 ## VirtualMachine Endpoints
@@ -202,7 +208,7 @@ Create a new VirtualMachine resource.
 - `name` (CharField, required)
 - `provisioner` (CharField, required) — values: `"VCENTER"`
 - `billing_account` (integer PK, optional, nullable)
-- `active_from` (date, required)
+- `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, optional)
 
 **Read-only fields:**
@@ -356,6 +362,12 @@ Ingest a daily usage snapshot.
 - `date` must be <= today (no future-dated snapshots)
 - `cpu_count`, `ram_mb`, `disks_total_gb` must be non-negative numbers. Note: zero values are explicitly valid for any dimension and produce `daily_cost = 0` for that dimension, consistent with the StorageHotel zero-quota behavior.
 - If a snapshot already exists for the same virtual machine and date, return 409 Conflict — no silent overwrite
+
+**Resource status and ingestion rules:**
+
+- RETIRED resources: ingestion of historical snapshots is allowed. The date validation already ensures the snapshot is historical. Late-arriving snapshots for retired resources are a legitimate operational scenario.
+- Soft-deleted resources: ingestion is rejected. The default manager returns 404 — soft-deleted resources are not valid ingestion targets in v1.
+- Future-dated snapshots remain invalid regardless of resource status.
 
 ---
 

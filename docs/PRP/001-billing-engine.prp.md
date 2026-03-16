@@ -220,7 +220,7 @@ The `Invoice` model includes two new fields that are part of the invoice identit
 {
   "selection_scope": "<scope>",
   "selected_resource_types": ["sorted", "alphabetically"],
-  "explicit_resources": [{"resource_type": "...", "resource_id": "..."}]
+  "explicit_resources": [{"resource_type": "...", "resource_id": 101}]
 }
 ```
 
@@ -230,6 +230,7 @@ The `Invoice` model includes two new fields that are part of the invoice identit
 - Stable key ordering: `selection_scope`, `selected_resource_types`, `explicit_resources`
 - Sort `selected_resource_types` alphabetically
 - Normalize `explicit_resources` to objects with `resource_type` and `resource_id`; sort by `resource_type` then `resource_id`
+- Numeric identifiers (`resource_id`) must be serialized as JSON numbers, not strings
 - Serialize JSON without insignificant whitespace
 - Encode the resulting JSON string as UTF-8 before hashing
 
@@ -250,6 +251,8 @@ There must be at most one draft invoice per `(billing_account, period_start, per
 A matching finalized invoice must block regeneration entirely (finalized invoices are immutable).
 
 A matching draft is replaced atomically when `force=true`.
+
+**v1 limitation — cross-scope double-billing risk:** v1 does not prevent the same resource from appearing in multiple invoices for the same period under different selection scopes. Operators must not generate invoices with overlapping resource selections for the same billing account and period. Finalization is the operational safeguard — do not finalize overlapping invoices.
 
 ## Concurrency Control
 

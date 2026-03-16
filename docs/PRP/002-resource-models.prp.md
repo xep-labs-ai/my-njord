@@ -179,7 +179,7 @@ Field types:
 - `billing_account` — FK to BillingAccount, nullable (null = unassigned), on_delete=PROTECT
 - `name` — CharField(max_length=255), required, not unique
 - `status` — CharField(max_length=20, choices=["UNASSIGNED", "ACTIVE", "RETIRED"], default="UNASSIGNED")
-- `active_from` (date, required): the first day the resource is billable.
+- `active_from` (date, required): the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, nullable): the last day the resource is billable. `null` means open-ended (no end date).
 
 Status lifecycle:
@@ -225,7 +225,7 @@ Changing `active_from` or `active_to` on a resource that has been included in a 
 
 Represents a **filesystem resource**.
 
-Fields (in addition to inherited ResourceModel fields including `deleted_at`):
+All fields (including inherited from ResourceModel):
 
 ```
 billing_account
@@ -308,7 +308,7 @@ created_at
 
 Represents a compute resource.
 
-Fields (in addition to inherited ResourceModel fields including `deleted_at`):
+All fields (including inherited from ResourceModel):
 
 ```
 billing_account
@@ -414,7 +414,6 @@ metadata
 
 Metadata may include:
 ```
-selection_scope
 selected_resource_types
 explicit_resources
 force
@@ -422,6 +421,8 @@ autofill_missing_days
 provisional
 missing_data_summary
 ```
+
+Note: `selection_scope` is a top-level database field on `Invoice` and does not need to be duplicated in `metadata`.
 
 Metadata flag semantics:
 

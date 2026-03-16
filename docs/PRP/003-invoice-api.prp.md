@@ -44,6 +44,8 @@ Generate a draft invoice.
 - Status 400: Validation error (missing data, invalid selection, etc.)
 - Status 409: Duplicate draft or finalized invoice exists (unless force=true)
 
+The generate endpoint returns the full invoice including lines, using the same serializer shape as the detail endpoint.
+
 **Response body:**
 
 ```json
@@ -67,7 +69,30 @@ Generate a draft invoice.
     "force": false,
     "provisional": false,
     "missing_data_summary": null
-  }
+  },
+  "lines": [
+    {
+      "id": "<id>",
+      "resource_type": "storage_hotel",
+      "resource_id": 101,
+      "description": "StorageHotel #101",
+      "total_cost": "1500.5000000000",
+      "currency": "NOK",
+      "metadata": {
+        "billing_dimensions": ["quota_tb"],
+        "total_quantity_by_dimension": {
+          "quota_tb_days": "31.5"
+        },
+        "quota_unit": "KIB",
+        "resource_snapshot": {
+          "id": 101,
+          "name": "storage-primary",
+          "filesystem_identifier": "storage-001",
+          "quota_unit": "KIB"
+        }
+      }
+    }
+  ]
 }
 ```
 
@@ -165,16 +190,17 @@ Retrieve a single invoice with lines.
       "resource_type": "storage_hotel",
       "resource_id": 101,
       "description": "StorageHotel #101",
-      "total_cost": "1500.50",
+      "total_cost": "1500.5000000000",
       "currency": "NOK",
       "metadata": {
         "billing_dimensions": ["quota_tb"],
         "total_quantity_by_dimension": {
           "quota_tb_days": "31.5"
         },
+        "quota_unit": "KIB",
         "resource_snapshot": {
           "id": 101,
-          "name": "StorageHotel #101",
+          "name": "storage-primary",
           "filesystem_identifier": "storage-001",
           "quota_unit": "KIB"
         }
@@ -200,7 +226,7 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
 
 - Status 200: Invoice finalized
 - Status 404: Invoice not found
-- Status 409: Invoice is already finalized (idempotency conflict)
+- Status 409: Invoice is already finalized
 
 **Response body:**
 
@@ -231,16 +257,17 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
       "resource_type": "storage_hotel",
       "resource_id": 101,
       "description": "StorageHotel #101",
-      "total_cost": "1500.50",
+      "total_cost": "1500.5000000000",
       "currency": "NOK",
       "metadata": {
         "billing_dimensions": ["quota_tb"],
         "total_quantity_by_dimension": {
           "quota_tb_days": "31.5"
         },
+        "quota_unit": "KIB",
         "resource_snapshot": {
           "id": 101,
-          "name": "StorageHotel #101",
+          "name": "storage-primary",
           "filesystem_identifier": "storage-001",
           "quota_unit": "KIB"
         }
