@@ -161,11 +161,11 @@ Explain what should be stored in `InvoiceDailyCost` for this resource.
 ## API endpoints
 
 ```text
-POST   /<resources>/
-GET    /<resources>/
-GET    /<resources>/{id}/
-PATCH  /<resources>/{id}/
-POST   /<resources>/{id}/<ingestion-endpoint>
+POST   /api/v1/<resources>/
+GET    /api/v1/<resources>/
+GET    /api/v1/<resources>/{id}/
+PATCH  /api/v1/<resources>/{id}/
+POST   /api/v1/<resources>/{id}/<ingestion-endpoint>
 ```
 
 Note: The ingestion endpoint name (`/usage` above is a placeholder) is resource-specific and must be defined per resource PRP. Each resource PRP must define its own ingestion endpoint name that reflects the type of billing data being ingested. Prefer singular domain-specific nouns (e.g., `/quota`, `/usage`, `/capacity`).

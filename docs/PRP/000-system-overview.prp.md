@@ -159,9 +159,18 @@ AND active_from <= day
 AND (active_to IS NULL OR day <= active_to)
 ```
 
-Note: `billing_account.make_invoice = True` is a pre-condition checked before resource evaluation, not a per-day condition. See `001-billing-engine.prp.md` for the authoritative billing rule.
+**Important:** `status` is for operational and display purposes only. It does not determine billing eligibility.
 
-`status` represents the resource's current lifecycle state but does not determine historical billability. See `001-billing-engine.prp.md` for the authoritative billing rule.
+Billing eligibility is determined exclusively by `active_from` and `active_to` date ranges:
+
+- `status` can be `UNASSIGNED`, `ACTIVE`, or `RETIRED` — these represent the resource's current lifecycle state
+- Setting `status = RETIRED` does not retroactively affect billing
+- Billing stops when `active_to` is reached, not when status changes
+- A resource with `status = RETIRED` and a future `active_to` date remains billable until that date
+
+Example: a resource with `status = RETIRED` and `active_to = 2026-12-31` remains billable through 2026-12-31 even though its status changed.
+
+Note: `billing_account.make_invoice = True` is a pre-condition checked before resource evaluation, not a per-day condition. See `001-billing-engine.prp.md` for the authoritative billing rule.
 
 ---
 

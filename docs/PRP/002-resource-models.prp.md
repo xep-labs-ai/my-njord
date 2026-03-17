@@ -229,6 +229,7 @@ All fields (including inherited from ResourceModel):
 
 ```
 billing_account
+name
 filesystem_identifier
 quota_unit
 status
@@ -546,7 +547,7 @@ Field types:
 - `invoice` — FK to Invoice, on_delete=CASCADE, required
 - `resource_type` — CharField(max_length=50), required
 - `resource_id` — PositiveIntegerField, required
-- `description` — CharField(max_length=255), optional (blank=True, null=True) — frozen at invoice generation time; set to the resource's `name` field if present and non-blank, otherwise falls back to `{ResourceType} #{resource_id}` (e.g., `StorageHotel #101`). Never recomputed from the live resource after generation.
+- `description` — CharField(max_length=255), optional (blank=True, null=True) — frozen at invoice generation time; set to the resource's `name` field if present and non-blank, otherwise falls back to `{ResourceType} #{resource_id}` where `{ResourceType}` is the Django model class name in PascalCase (e.g., `StorageHotel #101`, not `storage_hotel #101`). Never recomputed from the live resource after generation.
 - `total_cost` — DecimalField(max_digits=14, decimal_places=10), required (10 decimal places, not rounded)
 - `currency` — CharField(max_length=3, default="NOK")
 - `metadata` — JSONField(default=dict)
