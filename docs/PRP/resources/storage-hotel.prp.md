@@ -16,6 +16,7 @@ Fields:
 id
 billing_account
 name
+description
 filesystem_identifier
 quota_unit
 status
