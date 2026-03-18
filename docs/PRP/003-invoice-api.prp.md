@@ -75,7 +75,7 @@ The generate endpoint returns the full invoice including lines, using the same s
       "id": "<id>",
       "resource_type": "storage_hotel",
       "resource_id": 101,
-      "description": "StorageHotel #101",
+      "description": "storage-primary",
       "total_cost": "1500.5000000000",
       "currency": "NOK",
       "metadata": {
@@ -89,6 +89,7 @@ The generate endpoint returns the full invoice including lines, using the same s
           "name": "storage-primary",
           "namespace": "uio_fs01",
           "quota_unit": "KIB"
+          "description_resource": "Primary storage for department"
         }
       }
     }
@@ -140,7 +141,7 @@ Note: `provisional` is intentionally excluded from the list response in v1. It i
       "period_start": "2026-01-01",
       "period_end": "2026-01-31",
       "status": "draft",
-      "total_amount": null,
+      "total_amount": "1500.50",
       "currency": "NOK",
       "selection_scope": "resource_types",
       "created_at": "2026-01-15T10:30:00Z",
@@ -189,7 +190,7 @@ Retrieve a single invoice with lines.
       "id": "<id>",
       "resource_type": "storage_hotel",
       "resource_id": 101,
-      "description": "StorageHotel #101",
+      "description": "storage-primary",
       "total_cost": "1500.5000000000",
       "currency": "NOK",
       "metadata": {
@@ -203,6 +204,7 @@ Retrieve a single invoice with lines.
           "name": "storage-primary",
           "namespace": "uio_fs01",
           "quota_unit": "KIB"
+          "description_resource": "Primary storage for department"
         }
       }
     }
@@ -256,7 +258,7 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
       "id": "<id>",
       "resource_type": "storage_hotel",
       "resource_id": 101,
-      "description": "StorageHotel #101",
+      "description": "storage-primary",
       "total_cost": "1500.5000000000",
       "currency": "NOK",
       "metadata": {
@@ -270,6 +272,7 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
           "name": "storage-primary",
           "namespace": "uio_fs01",
           "quota_unit": "KIB"
+          "description_resource": "Primary storage for department"
         }
       }
     }

@@ -16,8 +16,8 @@ Fields:
 id
 billing_account
 name
-description
 namespace
+description_resource
 quota_unit
 status
 active_from
@@ -142,6 +142,12 @@ The StorageHotel `pricing_dimension` on `ResourcePrice` is always `"quota_tb"` i
 
 ---
 
+## Autofill Rule
+
+When autofill is needed for a missing day, `quota_raw` is carried forward from the last known `StorageHotelDailyQuota` row. Since StorageHotel has a single billing dimension (`quota_tb`), the carry-forward is equivalent to carrying forward the complete billing state.
+
+---
+
 ## Canonical `resource_snapshot` Schema
 
 The `resource_snapshot` in `InvoiceLine.metadata` for StorageHotel must contain:
@@ -152,6 +158,8 @@ The `resource_snapshot` in `InvoiceLine.metadata` for StorageHotel must contain:
   "name": "<str>",
   "namespace": "<str>",
   "quota_unit": "<str>"
+  "quota_unit": "<str>",
+  "description_resource": "<str>"
 }
 ```
 
@@ -175,6 +183,7 @@ This snapshot is frozen at invoice generation time and must be present for all S
     "name": "storage-primary",
     "namespace": "uio_fs01",
     "quota_unit": "KB"
+    "description_resource": ""
   }
 }
 ```
@@ -195,7 +204,7 @@ StorageHotel `InvoiceDailyCost.metadata` example:
   "resolved_prices": {
     "quota_tb": {"price_per_unit_year": "400", "currency": "NOK", "discount_applied": true}
   },
-  "dimension_costs": {"quota_tb": "131.51"},
+  "dimension_costs": {"quota_tb": "131.5068493150"},
   "autofilled": false
 }
 ```
@@ -212,4 +221,5 @@ GET    /api/v1/storage-hotels/
 GET    /api/v1/storage-hotels/{id}/
 PATCH  /api/v1/storage-hotels/{id}/
 POST   /api/v1/storage-hotels/{id}/quota
+POST   /api/v1/storage-hotels/{id}/soft-delete
 ```

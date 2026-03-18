@@ -196,6 +196,19 @@ apps/
  └── ingest/
 ```
 
+App boundaries:
+
+apps/billing/ owns durable billing state:
+- resource models and daily snapshot models
+- pricing models (PriceList, ResourcePrice)
+- invoice models (Invoice, InvoiceLine, InvoiceDailyCost)
+- billing engine services
+
+apps/ingest/ owns ingestion workflows:
+- ingestion API views and serializers
+- ingestion orchestration/services
+- ingestion event models (QuotaIngestionEvent, VirtualMachineUsageIngestionEvent)
+
 Detailed resource models are defined in:
 
 ```

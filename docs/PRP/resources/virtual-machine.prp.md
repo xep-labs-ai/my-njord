@@ -17,6 +17,7 @@ id
 billing_account
 name
 namespace
+description_resource
 status
 provisioner
 active_from
@@ -158,6 +159,7 @@ The `resource_snapshot` in `InvoiceLine.metadata` for VirtualMachine must contai
   "name": "<str>",
   "namespace": "<str>",
   "provisioner": "<str>"
+  "description_resource": "<str>"
 }
 ```
 
@@ -184,6 +186,7 @@ For VirtualMachine invoices, `InvoiceLine.metadata` has this standard structure:
     "name": "vm-prod-001",
     "namespace": "USIT",
     "provisioner": "VCENTER"
+    "description_resource": ""
   }
 }
 ```
@@ -218,7 +221,7 @@ VirtualMachine `InvoiceDailyCost.metadata` example:
     "ram_gb": {"price_per_unit_year": "40", "currency": "NOK", "discount_applied": false},
     "disk_gb": {"price_per_unit_year": "2", "currency": "NOK", "discount_applied": false}
   },
-  "dimension_costs": {"cpu_count": "6.58", "ram_gb": "3.51", "disk_gb": "2.74"},
+  "dimension_costs": {"cpu_count": "6.5753424657", "ram_gb": "3.5068493150", "disk_gb": "2.7397260273"},
   "autofilled": false
 }
 ```
@@ -238,4 +241,5 @@ GET    /api/v1/virtual-machines/
 GET    /api/v1/virtual-machines/{id}/
 PATCH  /api/v1/virtual-machines/{id}/
 POST   /api/v1/virtual-machines/{id}/usage
+POST   /api/v1/virtual-machines/{id}/soft-delete
 ```

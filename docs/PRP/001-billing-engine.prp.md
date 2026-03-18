@@ -381,8 +381,17 @@ finalized
 
 - Format: `INV-YYYY-mm-NNNNN`
 - `YYYY-mm` is derived from the **finalization date** (not `period_start`) — the number reflects when the invoice was issued
-- `NNNNN` is a **global auto-incrementing sequence** (not per-month) — the counter does not reset each month
+- `NNNNN` is zero-padded to at least 5 digits but may exceed 5 digits as the sequence grows. 5 digits is a minimum display width, not a maximum constraint.
+- `NNNNN` comes from a **global auto-incrementing sequence** (not per-month) — the counter does not reset each month
 - Concurrency: use a dedicated PostgreSQL sequence or `SELECT MAX(invoice_number) FOR UPDATE` within the finalization transaction to prevent duplicate assignment
+
+Examples:
+
+```
+INV-2026-01-00001
+INV-2026-01-99999
+INV-2026-02-100000
+```
 
 ---
 

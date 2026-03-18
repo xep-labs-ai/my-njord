@@ -31,6 +31,7 @@ Create a new StorageHotel resource.
 - `name` (CharField, required)
 - `namespace` (CharField, required)
 - `quota_unit` (CharField, required) — values: `"KB"`, `"KIB"`
+- `description_resource` (CharField, optional, max_length=200, default="")
 - `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, optional)
@@ -50,6 +51,7 @@ Create a new StorageHotel resource.
   "name": "storage-primary",
   "namespace": "uio_fs01",
   "quota_unit": "KIB",
+  "description_resource": "Primary storage for department",
   "billing_account": 1,
   "active_from": "2026-01-01",
   "active_to": null
@@ -64,6 +66,7 @@ Create a new StorageHotel resource.
   "name": "storage-primary",
   "namespace": "uio_fs01",
   "quota_unit": "KIB",
+  "description_resource": "Primary storage for department",
   "billing_account": 1,
   "status": "UNASSIGNED",
   "active_from": "2026-01-01",
@@ -100,6 +103,7 @@ List StorageHotel resources.
       "id": 101,
       "name": "storage-primary",
       "quota_unit": "KIB",
+      "description_resource": "Primary storage for department",
       "billing_account": 1,
       "status": "ACTIVE",
       "active_from": "2026-01-01",
@@ -132,6 +136,7 @@ Partially update a StorageHotel resource.
 
 - `name`
 - `namespace`
+- `description_resource`
 - `billing_account`
 - `active_from`
 - `active_to`
@@ -177,7 +182,7 @@ Ingest a daily quota snapshot.
   "id": 1001,
   "storage_hotel": 101,
   "date": "2026-01-15",
-  "quota_raw": "5000",
+  "quota_raw": "5000.0000",
   "created_at": "2026-01-15T10:30:00Z"
 }
 ```
@@ -188,11 +193,40 @@ Ingest a daily quota snapshot.
 - `quota_raw` must be a decimal number >= 0 with precision constraints: `max_digits=25, decimal_places=4`. This represents the raw quota value in the unit specified by `quota_unit` (KB or KiB); during billing it is normalized to TB for pricing calculations. Note: `quota_raw = 0` is explicitly valid. It produces `normalized_usage = {"quota_tb": "0"}` and `daily_cost = 0`.
 - If a snapshot already exists for the same storage hotel and date, return 409 Conflict — no silent overwrite
 
+**Decimal serialization:**
+
+Decimal fields are serialized with fixed precision. Trailing zeros are expected even when the value is conceptually an integer.
+
 **Resource status and ingestion rules:**
 
 - RETIRED resources: ingestion of historical snapshots is allowed. The date validation already ensures the snapshot is historical. Late-arriving snapshots for retired resources are a legitimate operational scenario.
 - Soft-deleted resources: ingestion is rejected. The default manager returns 404 — soft-deleted resources are not valid ingestion targets in v1.
 - Future-dated snapshots remain invalid regardless of resource status.
+
+---
+
+### POST /api/v1/storage-hotels/{id}/soft-delete
+
+Soft-delete a RETIRED resource.
+
+**Preconditions:**
+
+- Resource must have status = RETIRED
+- Resource must have active_to set
+
+**Behavior:**
+
+- Sets deleted_at to the current timestamp
+- Resource is excluded from default querysets after soft-delete
+- Resource remains accessible via billing_objects manager
+- Soft-delete is irreversible via API in v1
+
+**Response:**
+
+- 200: Updated resource representation with deleted_at set
+- 400: Resource is not RETIRED or active_to is not set
+- 404: Resource not found
+- 409: Resource is already soft-deleted
 
 ---
 
@@ -207,6 +241,7 @@ Create a new VirtualMachine resource.
 - `name` (CharField, required)
 - `namespace` (CharField, required) — represents the VM's identity/context within the provisioner or organization or other logical grouping.
 - `provisioner` (CharField, required) — values: `"VCENTER"`
+- `description_resource` (CharField, optional, max_length=200, default="")
 - `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, optional)
@@ -226,6 +261,7 @@ Create a new VirtualMachine resource.
   "name": "vm-compute-01",
   "provisioner": "VCENTER",
   "namespace": "USIT",
+  "description_resource": "Production compute server",
   "billing_account": 1,
   "active_from": "2026-01-01",
   "active_to": null
@@ -240,6 +276,7 @@ Create a new VirtualMachine resource.
   "name": "vm-compute-01",
   "namespace": "USIT",
   "provisioner": "VCENTER",
+  "description_resource": "Production compute server",
   "billing_account": 1,
   "status": "UNASSIGNED",
   "active_from": "2026-01-01",
@@ -281,6 +318,7 @@ Example:
       "name": "vm-compute-01",
       "namespace": "USIT",
       "provisioner": "VCENTER",
+      "description_resource": "Production compute server",
       "billing_account": 1,
       "status": "ACTIVE",
       "active_from": "2026-01-01",
@@ -312,6 +350,7 @@ Partially update a VirtualMachine resource.
 **Patchable fields:**
 
 - `name`
+- `description_resource`
 - `billing_account`
 - `active_from`
 - `active_to`
@@ -358,8 +397,8 @@ Ingest a daily usage snapshot.
   "virtual_machine": 205,
   "date": "2026-01-15",
   "cpu_count": "8",
-  "ram_mb": "65536",
-  "disks_total_gb": "500",
+  "ram_mb": "65536.00",
+  "disks_total_gb": "500.00",
   "created_at": "2026-01-15T10:30:00Z"
 }
 ```
@@ -375,6 +414,31 @@ Ingest a daily usage snapshot.
 - RETIRED resources: ingestion of historical snapshots is allowed. The date validation already ensures the snapshot is historical. Late-arriving snapshots for retired resources are a legitimate operational scenario.
 - Soft-deleted resources: ingestion is rejected. The default manager returns 404 — soft-deleted resources are not valid ingestion targets in v1.
 - Future-dated snapshots remain invalid regardless of resource status.
+
+---
+
+### POST /api/v1/virtual-machines/{id}/soft-delete
+
+Soft-delete a RETIRED resource.
+
+**Preconditions:**
+
+- Resource must have status = RETIRED
+- Resource must have active_to set
+
+**Behavior:**
+
+- Sets deleted_at to the current timestamp
+- Resource is excluded from default querysets after soft-delete
+- Resource remains accessible via billing_objects manager
+- Soft-delete is irreversible via API in v1
+
+**Response:**
+
+- 200: Updated resource representation with deleted_at set
+- 400: Resource is not RETIRED or active_to is not set
+- 404: Resource not found
+- 409: Resource is already soft-deleted
 
 ---
 
@@ -422,7 +486,7 @@ When patching `status = RETIRED` from `ACTIVE`, the request must include `active
 
 If both `active_from` and `active_to` are set, `active_to` must be >= `active_from`. If `active_to < active_from`, the request returns 400.
 
-When a resource transitions to `RETIRED` via PATCH, the service layer sets `deleted_at` to the current timestamp automatically. There is no dedicated DELETE endpoint in v1.
+Transitioning to RETIRED does not set `deleted_at`. RETIRED resources remain visible in default querysets and accept late-arriving snapshot ingestion. Soft-deletion is a separate operation triggered by the soft-delete endpoint.
 
 Changing `active_from` or `active_to` on a resource that has been included in a finalized invoice is allowed. Finalized invoices are immutable and unaffected. The change only affects future invoice generation runs.
 

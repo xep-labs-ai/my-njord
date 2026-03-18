@@ -166,6 +166,7 @@ Fields:
 ```
 billing_account
 name
+description_resource
 status
 active_from
 active_to
@@ -178,6 +179,7 @@ Field types:
 
 - `billing_account` — FK to BillingAccount, nullable (null = unassigned), on_delete=PROTECT
 - `name` — CharField(max_length=255), required, not unique
+- `description_resource` — CharField(max_length=200, blank=True, default="")
 - `status` — CharField(max_length=20, choices=["UNASSIGNED", "ACTIVE", "RETIRED"], default="UNASSIGNED")
 - `active_from` (date, required): the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
 - `active_to` (date, nullable): the last day the resource is billable. `null` means open-ended (no end date).
@@ -274,6 +276,7 @@ Metadata flag semantics:
 
 - `provisional` (boolean) — `true` when `period_end > today` at generation time; the invoice covers future days filled via autofill. Defaults to `false`.
 - `missing_data_summary` — present when `incomplete=true`; reports which resources had missing days.
+- `explicit_resources` uses the canonical `[{"resource_type": "...", "resource_id": <int>}]` format defined in `001-billing-engine.prp.md`.
 
 Uniqueness constraint:
 
@@ -289,7 +292,7 @@ Invoice number assignment:
 
 Field types:
 
-- `invoice_number` — CharField(max_length=20), nullable, unique when set (fits `INV-YYYY-mm-NNNNN`)
+- `invoice_number` — CharField(max_length=30), nullable, unique when set (fits `INV-YYYY-mm-NNNNN` with room for counter growth beyond 5 digits)
 - `billing_account` — FK to BillingAccount, required, on_delete=PROTECT
 - `period_start` — DateField, required
 - `period_end` — DateField, required
@@ -324,9 +327,12 @@ description
 total_cost
 currency
 metadata
+created_at
 ```
 
 Metadata must include `billing_dimensions` and `total_quantity_by_dimension`.
+
+InvoiceLine inherits from `CreatedAtModel` (append-only, no `updated_at`).
 
 **Naming convention for `total_quantity_by_dimension` keys:** Keys use the format `{pricing_dimension}_days`, representing the cumulative quantity-days for that dimension across all billed days in the invoice period. Examples: `quota_tb_days`, `cpu_count_days`, `ram_gb_days`, `disk_gb_days`.
 
@@ -344,6 +350,7 @@ Standard metadata structure for StorageHotel:
     "name": "storage-primary",
     "namespace": "uio_fs01",
     "quota_unit": "KB"
+    "description_resource": ""
   }
 }
 ```
@@ -365,6 +372,7 @@ Standard metadata structure for VirtualMachine:
     "name": "vm-prod-001",
     "namespace": "USIT",
     "provisioner": "VCENTER"
+    "description_resource": ""
   }
 }
 ```
@@ -445,8 +453,6 @@ Metadata — required fields (must always be present for audit reproducibility):
 - `dimension_costs` — object keyed by pricing dimension. Each value is the per-dimension daily cost as a Decimal string.
 - `autofilled` — boolean (mirrors the `autofilled` column for audit self-containment; the column is the queryable source of truth)
 
-**Note on example precision:** The `dimension_costs` examples below are simplified for readability. Actual values use full Decimal precision matching `InvoiceDailyCost.daily_cost` (10 decimal places), e.g., `"131.5068493150"` rather than `"131.51"`.
-
 StorageHotel metadata example:
 
 ```json
@@ -455,7 +461,7 @@ StorageHotel metadata example:
   "resolved_prices": {
     "quota_tb": {"price_per_unit_year": "400", "currency": "NOK", "discount_applied": true}
   },
-  "dimension_costs": {"quota_tb": "131.51"},
+  "dimension_costs": {"quota_tb": "131.5068493150"},
   "autofilled": false
 }
 ```
@@ -470,7 +476,7 @@ VirtualMachine metadata example:
     "ram_gb": {"price_per_unit_year": "40", "currency": "NOK", "discount_applied": false},
     "disk_gb": {"price_per_unit_year": "2", "currency": "NOK", "discount_applied": false}
   },
-  "dimension_costs": {"cpu_count": "6.58", "ram_gb": "3.51", "disk_gb": "2.74"},
+  "dimension_costs": {"cpu_count": "6.5753424657", "ram_gb": "3.5068493150", "disk_gb": "2.7397260273"},
   "autofilled": false
 }
 ```

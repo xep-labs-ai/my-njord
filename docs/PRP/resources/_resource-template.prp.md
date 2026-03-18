@@ -22,6 +22,7 @@ Fields (inherited from ResourceModel):
 id
 billing_account
 name
+description_resource
 status
 active_from
 active_to
@@ -129,6 +130,7 @@ The `resource_snapshot` in `InvoiceLine.metadata` for `<ResourceName>` must cont
 {
   "id": "<int>",
   "name": "<str>",
+  "description_resource": "<str>",
   "<resource_specific_field_1>": "<type>",
   "<resource_specific_field_2>": "<type>"
 }
@@ -166,6 +168,7 @@ GET    /api/v1/<resources>/
 GET    /api/v1/<resources>/{id}/
 PATCH  /api/v1/<resources>/{id}/
 POST   /api/v1/<resources>/{id}/<ingestion-endpoint>
+POST   /api/v1/<resources>/{id}/soft-delete
 ```
 
 Note: The ingestion endpoint name (`/usage` above is a placeholder) is resource-specific and must be defined per resource PRP. Each resource PRP must define its own ingestion endpoint name that reflects the type of billing data being ingested. Prefer singular domain-specific nouns (e.g., `/quota`, `/usage`, `/capacity`).
