@@ -57,7 +57,15 @@ Constraint:
 
 ```text
 (virtual_machine_id, date) UNIQUE
+
 ```
+
+Field types:
+
+- `virtual_machine` — FK to VirtualMachine, required, on_delete=CASCADE
+- `cpu_count` — PositiveIntegerField
+- `ram_mb` — DecimalField(max_digits=14, decimal_places=2)
+- `disks_total_gb` — DecimalField(max_digits=14, decimal_places=2)
 
 ---
 

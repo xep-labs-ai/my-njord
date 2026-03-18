@@ -40,6 +40,14 @@ Constraint:
 filesystem_identifier UNIQUE
 ```
 
+Soft-delete semantics:
+
+- If `deleted_at` is set, `status` must be `RETIRED`
+- If `deleted_at` is set, `active_to` must be set
+- `active_to` must be on or before the calendar date of `deleted_at`
+- Default querysets exclude soft-deleted resources; billing and audit workflows can access them
+- Billability for historical days is resolved from `active_from`/`active_to`, not from `deleted_at` alone
+
 ---
 
 ## Daily snapshot model
@@ -64,11 +72,18 @@ Constraint:
 
 `quota_raw` is stored in the unit defined by `quota_unit`.
 
+Field types:
+
+- `storage_hotel` — FK to StorageHotel, required, on_delete=CASCADE
+- `quota_raw` — DecimalField(max_digits=25, decimal_places=4)
+
 ---
 
 ## Ingestion event model
 
 ### QuotaIngestionEvent
+
+Audit log for quota ingestion.
 
 Fields:
 
