@@ -36,7 +36,7 @@ VCENTER
 Constraint:
 
 ```text
-(namespace, privisioner, name) UNIQUE
+(namespace, provisioner, name) UNIQUE
 ```
 
 ---
@@ -92,6 +92,17 @@ normalized_disks_total_gb
 request_id
 created_at
 ```
+
+Field types:
+
+- `virtual_machine` — FK to VirtualMachine, required, on_delete=CASCADE
+- `date` — DateField, required
+- `raw_payload` — JSONField, required
+- `normalized_cpu_count` — PositiveIntegerField, required
+- `normalized_ram_mb` — DecimalField(max_digits=14, decimal_places=2), required
+- `normalized_disks_total_gb` — DecimalField(max_digits=14, decimal_places=2), required
+- `request_id` — UUIDField, nullable (null if not provided by the caller)
+- `created_at` — DateTimeField, auto_now_add
 
 ---
 

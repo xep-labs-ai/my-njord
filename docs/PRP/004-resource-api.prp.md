@@ -383,7 +383,7 @@ Ingest a daily usage snapshot.
 ```json
 {
   "date": "2026-01-15",
-  "cpu_count": "8",
+  "cpu_count": 8,
   "ram_mb": "65536",
   "disks_total_gb": "500"
 }
@@ -396,7 +396,7 @@ Ingest a daily usage snapshot.
   "id": 2001,
   "virtual_machine": 205,
   "date": "2026-01-15",
-  "cpu_count": "8",
+  "cpu_count": 8,
   "ram_mb": "65536.00",
   "disks_total_gb": "500.00",
   "created_at": "2026-01-15T10:30:00Z"

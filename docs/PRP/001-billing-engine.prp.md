@@ -175,6 +175,17 @@ When `force=true` and a matching draft invoice exists, the old draft and all its
 
 Missing pricing data causes invoice generation to fail even when `force=true`. The `force` flag only affects missing usage data and duplicate draft handling. A resource billed at zero due to a pricing configuration gap is more dangerous than a failed invoice.
 
+**Zero-cost forced rows:**
+
+When force mode bills a missing day at zero:
+
+- `amount` = Decimal("0.00")
+- `autofilled` = True
+- `resolved_prices` = the actual resolved price for that day (base or discount price, evaluated normally — since usage is zero and zero < any discount threshold, the base price applies with `discount_applied: false`)
+- `metadata` contains zeroed usage values (e.g. `quota_bytes: 0`, `used_bytes: 0` for StorageHotel; `cpu_count: 0`, `ram_mb: 0`, `disks_total_gb: 0` for VirtualMachine)
+
+This makes zero-cost rows auditable: you can see WHY the day was zero (autofilled missing data) and what price would have applied.
+
 **Future-dated invoice periods:**
 
 By default, `period_end > today` is rejected with 400 Bad Request. Invoice periods must lie entirely in the past or current day unless `autofill_missing_days=true` is explicitly set.
@@ -282,6 +293,8 @@ The billing engine resolves the price list from the account's **current** FK at 
 ## ResourcePrice
 
 Defines effective-dated pricing.
+
+ResourcePrice uses `CreatedAtModel`, meaning it has `created_at` but no `updated_at`. Prices are immutable once created.
 
 Fields:
 

@@ -97,6 +97,15 @@ request_id
 created_at
 ```
 
+Field types:
+
+- `storage_hotel` — FK to StorageHotel, required, on_delete=CASCADE
+- `date` — DateField, required
+- `raw_payload` — JSONField, required
+- `normalized_quota_raw` — DecimalField(max_digits=25, decimal_places=4), required
+- `request_id` — UUIDField, nullable (null if not provided by the caller)
+- `created_at` — DateTimeField, auto_now_add
+
 ---
 
 ## Billing unit
