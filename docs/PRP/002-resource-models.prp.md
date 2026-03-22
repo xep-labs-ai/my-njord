@@ -342,7 +342,7 @@ Standard metadata structure for StorageHotel:
   "resource_snapshot": {
     "id": 101,
     "name": "storage-primary",
-    "filesystem_identifier": "/mnt/storage-primary",
+    "namespace": "uio_fs01",
     "quota_unit": "KB"
   }
 }
@@ -359,9 +359,11 @@ Standard metadata structure for VirtualMachine:
     "disk_gb_days": "15500"
   },
   "provisioner": "VCENTER",
+  "namespace": "USIT",
   "resource_snapshot": {
     "id": 205,
     "name": "vm-prod-001",
+    "namespace": "USIT",
     "provisioner": "VCENTER"
   }
 }

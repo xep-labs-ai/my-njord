@@ -16,6 +16,7 @@ Fields:
 id
 billing_account
 name
+namespace
 status
 provisioner
 active_from
@@ -31,7 +32,11 @@ deleted_at
 VCENTER
 ```
 
-**v1 uniqueness note:** There is no natural-key uniqueness constraint in v1 beyond the primary key. Callers and ingestion workflows are responsible for avoiding duplicate VM creation. Duplicate VirtualMachine rows, if created, are treated as separate billable resources.
+Constraint:
+
+```text
+(namespace, privisioner, name) UNIQUE
+```
 
 ---
 
@@ -151,6 +156,7 @@ The `resource_snapshot` in `InvoiceLine.metadata` for VirtualMachine must contai
 {
   "id": "<int>",
   "name": "<str>",
+  "namespace": "<str>",
   "provisioner": "<str>"
 }
 ```
@@ -172,9 +178,11 @@ For VirtualMachine invoices, `InvoiceLine.metadata` has this standard structure:
     "disk_gb_days": "15500"
   },
   "provisioner": "VCENTER",
+  "namespace": "USIT",
   "resource_snapshot": {
     "id": 205,
     "name": "vm-prod-001",
+    "namespace": "USIT",
     "provisioner": "VCENTER"
   }
 }

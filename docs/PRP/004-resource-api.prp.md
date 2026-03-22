@@ -29,7 +29,7 @@ Create a new StorageHotel resource.
 **Writable fields:**
 
 - `name` (CharField, required)
-- `filesystem_identifier` (CharField, required)
+- `namespace` (CharField, required)
 - `quota_unit` (CharField, required) — values: `"KB"`, `"KIB"`
 - `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
@@ -48,7 +48,7 @@ Create a new StorageHotel resource.
 ```json
 {
   "name": "storage-primary",
-  "filesystem_identifier": "/mnt/storage-primary",
+  "namespace": "uio_fs01",
   "quota_unit": "KIB",
   "billing_account": 1,
   "active_from": "2026-01-01",
@@ -62,7 +62,7 @@ Create a new StorageHotel resource.
 {
   "id": 101,
   "name": "storage-primary",
-  "filesystem_identifier": "/mnt/storage-primary",
+  "namespace": "uio_fs01",
   "quota_unit": "KIB",
   "billing_account": 1,
   "status": "UNASSIGNED",
@@ -86,6 +86,7 @@ List StorageHotel resources.
 - `status` (optional, string) — filter by status (UNASSIGNED, ACTIVE, RETIRED)
 - `active_from` (optional, date) — filter resources active on or after this date
 - `active_to` (optional, date) — filter resources active on or before this date
+- `name` (optional, string) — filter by name (case-sensitive equal)
 
 **Response (200):**
 
@@ -98,7 +99,6 @@ List StorageHotel resources.
     {
       "id": 101,
       "name": "storage-primary",
-      "filesystem_identifier": "/mnt/storage-primary",
       "quota_unit": "KIB",
       "billing_account": 1,
       "status": "ACTIVE",
@@ -131,6 +131,7 @@ Partially update a StorageHotel resource.
 **Patchable fields:**
 
 - `name`
+- `namespace`
 - `billing_account`
 - `active_from`
 - `active_to`
@@ -138,8 +139,6 @@ Partially update a StorageHotel resource.
 - `quota_unit` — patchable with correction semantics (see warning below)
 
 **Not patchable after creation:**
-
-- `filesystem_identifier` — functions as the StorageHotel external/natural identifier and must remain stable
 
 **`quota_unit` correction warning:** Changing `quota_unit` is allowed in v1 as an administrative correction workflow, but it is a high-impact change because it alters how `quota_raw` values are interpreted for billing. Because historical unit assignment is not tracked, changing `quota_unit` after snapshots already exist may affect invoice generation for uninvoiced historical periods. Operational rule: if `quota_unit` is changed, affected draft invoices should be regenerated before finalization. Already finalized invoices remain immutable. The change should be audit-logged.
 
@@ -206,6 +205,7 @@ Create a new VirtualMachine resource.
 **Writable fields:**
 
 - `name` (CharField, required)
+- `namespace` (CharField, required) — represents the VM's identity/context within the provisioner or organization or other logical grouping.
 - `provisioner` (CharField, required) — values: `"VCENTER"`
 - `billing_account` (integer PK, optional, nullable)
 - `active_from` (date, required) — the first day the resource is billable. For resources starting in UNASSIGNED status, set `active_from` to the intended billing start date. Activating a resource does not automatically update `active_from`. Setting `active_from` far in the past will create a backdated billing window.
@@ -225,6 +225,7 @@ Create a new VirtualMachine resource.
 {
   "name": "vm-compute-01",
   "provisioner": "VCENTER",
+  "namespace": "USIT",
   "billing_account": 1,
   "active_from": "2026-01-01",
   "active_to": null
@@ -237,6 +238,7 @@ Create a new VirtualMachine resource.
 {
   "id": 205,
   "name": "vm-compute-01",
+  "namespace": "USIT",
   "provisioner": "VCENTER",
   "billing_account": 1,
   "status": "UNASSIGNED",
@@ -259,6 +261,10 @@ List VirtualMachine resources.
 - `billing_account` (optional, integer) — filter by billing account
 - `status` (optional, string) — filter by status (UNASSIGNED, ACTIVE, RETIRED)
 - `provisioner` (optional, string) — filter by provisioner
+**Query parameters:**
+- `active_from` (optional, date) — filter resources active on or after this date
+- `active_to` (optional, date) — filter resources active on or before this date
+
 
 **Response (200):** Paginated list.
 
@@ -273,6 +279,7 @@ Example:
     {
       "id": 205,
       "name": "vm-compute-01",
+      "namespace": "USIT",
       "provisioner": "VCENTER",
       "billing_account": 1,
       "status": "ACTIVE",

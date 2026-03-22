@@ -87,7 +87,7 @@ The generate endpoint returns the full invoice including lines, using the same s
         "resource_snapshot": {
           "id": 101,
           "name": "storage-primary",
-          "filesystem_identifier": "storage-001",
+          "namespace": "uio_fs01",
           "quota_unit": "KIB"
         }
       }
@@ -201,7 +201,7 @@ Retrieve a single invoice with lines.
         "resource_snapshot": {
           "id": 101,
           "name": "storage-primary",
-          "filesystem_identifier": "storage-001",
+          "namespace": "uio_fs01",
           "quota_unit": "KIB"
         }
       }
@@ -268,7 +268,7 @@ Once finalized, the invoice becomes immutable. Returns the full finalized Invoic
         "resource_snapshot": {
           "id": 101,
           "name": "storage-primary",
-          "filesystem_identifier": "storage-001",
+          "namespace": "uio_fs01",
           "quota_unit": "KIB"
         }
       }

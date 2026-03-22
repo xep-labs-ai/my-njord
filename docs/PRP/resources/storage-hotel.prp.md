@@ -17,7 +17,7 @@ id
 billing_account
 name
 description
-filesystem_identifier
+namespace
 quota_unit
 status
 active_from
@@ -37,7 +37,7 @@ KIB
 Constraint:
 
 ```text
-filesystem_identifier UNIQUE
+(namespace, name) UNIQUE
 ```
 
 Soft-delete semantics:
@@ -150,7 +150,7 @@ The `resource_snapshot` in `InvoiceLine.metadata` for StorageHotel must contain:
 {
   "id": "<int>",
   "name": "<str>",
-  "filesystem_identifier": "<str>",
+  "namespace": "<str>",
   "quota_unit": "<str>"
 }
 ```
@@ -173,7 +173,7 @@ This snapshot is frozen at invoice generation time and must be present for all S
   "resource_snapshot": {
     "id": 101,
     "name": "storage-primary",
-    "filesystem_identifier": "/mnt/storage-primary",
+    "namespace": "uio_fs01",
     "quota_unit": "KB"
   }
 }
